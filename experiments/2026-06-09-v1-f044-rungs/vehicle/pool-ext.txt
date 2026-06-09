@@ -1,0 +1,592 @@
+## ADR-040: Makefile as the Canonical Task Runner
+**Decision:** All developer-facing tasks in the Ledger repository are invoked through a single top-level `Makefile`. The canonical target set is: `make build`, `make test`, `make lint`, `make generate`, `make migrate-up`, `make migrate-down`, and `make run`. Each target is a thin wrapper that delegates to the underlying tool with pinned flags; no business logic lives in Make. Targets must be self-documenting via a `make help` target that parses `##`-style comments. CI pipelines call the same Make targets that developers use locally — pipeline YAML may not invoke `go test` or `golangci-lint` directly. New tasks require a Make target before they may be referenced in documentation or CI.
+
+**Rationale:** A single entry point eliminates drift between local and CI invocations: when a flag changes, it changes in exactly one place. Make is universally available on developer machines and CI runners, requiring no bootstrap step. The `make help` convention keeps the task surface discoverable for new contributors without maintaining a separate document that would inevitably fall out of date.
+
+===ADR===
+
+## ADR-041: Go Toolchain Version Pinning
+**Decision:** The Go toolchain version used to build Ledger is pinned via the `toolchain` directive in `go.mod` (currently `go1.22.4`). Developers' local `go` commands automatically download and use the pinned toolchain regardless of their installed version. CI runners install only a bootstrap Go and rely on the same directive, guaranteeing identical compiler behaviour everywhere. Toolchain upgrades are performed in a dedicated pull request that contains only the version bump and any required code adjustments, reviewed by at least one platform team member. Patch releases of the toolchain are adopted within two weeks of upstream publication; minor releases within one quarter, after the first patch release lands.
+
+**Rationale:** Compiler version skew between developer machines and CI has previously produced "works locally, fails in CI" confusion in other teams' services. The `toolchain` directive makes the pin self-enforcing rather than documentation-enforced. Isolating version bumps into their own pull request keeps the diff reviewable and makes any behavioural change attributable to the toolchain rather than to unrelated code changes landing in the same merge.
+
+===ADR===
+
+## ADR-042: Reproducible Builds with Version Stamping
+**Decision:** Ledger binaries are built with `-trimpath` and `CGO_ENABLED=0`, producing byte-identical output for identical source trees. Version metadata is injected at link time via `-ldflags` into three variables in `internal/buildinfo`: `Version` (git tag or `dev`), `Commit` (full SHA), and `BuildTime` (RFC3339, sourced from the commit timestamp rather than wall clock to preserve reproducibility). The values are exposed through the `ledger version` subcommand and as constant labels on the `ledger_build_info` metric. Builds that omit the ldflags produce a binary that reports `dev/unknown`, which the readiness gate in staging rejects.
+
+**Rationale:** Reproducible binaries allow any artifact to be independently rebuilt and verified from its source commit, which auditors have requested during compliance reviews. Sourcing `BuildTime` from the commit rather than the build machine clock is the standard trick to keep determinism without losing temporal context. Surfacing build metadata as a metric label means dashboards can correlate behaviour changes with specific deployed commits without consulting deployment tooling.
+
+===ADR===
+
+## ADR-043: Multi-Stage Docker Builds on Distroless
+**Decision:** Ledger's container image is produced by a multi-stage Dockerfile. The build stage uses the official `golang` image matching the pinned toolchain; the runtime stage uses `gcr.io/distroless/static-debian12:nonroot`. Only the compiled binary, CA certificates, and timezone data are copied into the final stage. The image runs as the distroless `nonroot` user (UID 65532) and declares no shell, package manager, or writable filesystem paths other than `/tmp` mounted as an emptyDir. Image size must stay under 40 MB; CI fails the build if the threshold is exceeded. Base image digests are pinned and updated by automation.
+
+**Rationale:** A distroless runtime stage removes the shell and package manager that account for the majority of CVE noise in container scans, cutting triage effort substantially. Running as a non-root user with a read-only filesystem satisfies the cluster's pod security baseline without per-deployment exceptions. The size ceiling is a guardrail against accidentally copying build caches or test fixtures into the production image, which has happened in sibling services.
+
+===ADR===
+
+## ADR-044: golangci-lint as the Single Lint Gate
+**Decision:** Static analysis for Ledger is consolidated into `golangci-lint` with a checked-in `.golangci.yml`. The enabled linter set includes `govet`, `staticcheck`, `errcheck`, `gosec`, `ineffassign`, `unused`, `misspell`, and `exhaustive` for enum switches. Lint runs locally via `make lint` and as a required CI check; warnings are treated as errors. Suppressions require an inline `//nolint:<linter> // <reason>` directive with a mandatory reason string, and the `nolintlint` linter rejects directives without one. Adding or removing a linter from the set requires a pull request that includes the full codebase cleanup for that linter in the same change.
+
+**Rationale:** One aggregated tool with one config file prevents the proliferation of ad-hoc analysis scripts with inconsistent versions. Mandatory reasons on suppressions convert each exception into reviewable documentation instead of silent decay. Requiring cleanup in the same PR as a linter addition keeps the codebase at zero warnings permanently, which is the only state in which a lint gate remains credible — a baseline of tolerated warnings trains people to ignore the output.
+
+===ADR===
+
+## ADR-045: Committed Code Generation Artifacts
+**Decision:** All generated Go code in Ledger — `sqlc` query bindings, `mockery` test doubles, and protobuf stubs — is committed to the repository rather than generated at build time. Generation is invoked via `make generate`, which runs every `go:generate` directive with pinned tool versions declared in `tools/tools.go`. CI runs `make generate` followed by `git diff --exit-code` to verify that committed artifacts match their sources. Generated files carry the standard `// Code generated by <tool>. DO NOT EDIT.` header and are excluded from lint and coverage metrics via path patterns in the respective configs.
+
+**Rationale:** Committing generated code makes the repository buildable with the Go toolchain alone — no generator installation step — and makes generator output changes visible in code review, where surprising diffs have caught generator version regressions twice in sibling services. The diff check in CI converts "did you remember to regenerate" from a review-comment ritual into a mechanical gate. Excluding generated files from coverage keeps quality metrics focused on human-written code.
+
+===ADR===
+
+## ADR-046: GitHub Actions as the CI Platform
+**Decision:** Ledger uses GitHub Actions for all continuous integration. Workflows live in `.github/workflows/` with one workflow per concern: `ci.yml` (lint, test, build on every pull request), `release.yml` (image build and publish on tag), and `nightly.yml` (extended test suite on a schedule). Jobs run on GitHub-hosted `ubuntu-latest` runners; self-hosted runners are not used. Third-party actions are pinned to full commit SHAs, not version tags, and additions to the action set require platform team review. Workflow files are owned by the platform team via CODEOWNERS and changes to them require their approval.
+
+**Rationale:** The repository already lives on GitHub, so Actions eliminates a separate CI account, credential surface, and webhook integration to operate. Hosted runners remove an entire class of maintenance and patching work that self-hosted fleets demand. SHA-pinning third-party actions defends against tag-moving supply-chain attacks, which have occurred publicly in the Actions ecosystem. CODEOWNERS gating on workflow files prevents CI privilege changes from landing without review by the team accountable for them.
+
+===ADR===
+
+## ADR-047: Required Pull Request Check Matrix
+**Decision:** Every pull request into `main` must pass a fixed set of required status checks before merge: `lint` (golangci-lint), `unit-test` (race-enabled unit tests), `integration-test` (testcontainers suite), `build` (binary and image build), `generate-check` (generated code freshness), and `migrations-check` (forward and reverse migration application against an empty database). Checks are defined as separate jobs so a failure identifies its category at a glance. Branch protection requires all six plus one approving review; administrators are not exempt. New required checks are introduced in report-only mode for one week before being promoted to required.
+
+**Rationale:** A named, fixed matrix makes the definition of "passing CI" explicit and prevents quiet erosion where a flaky job gets demoted to optional during a busy week. Separate jobs parallelise on independent runners, keeping wall-clock time near the slowest single category rather than the sum. The report-only introduction window surfaces false positives before a new check can block unrelated work, which preserves the team's trust in the gate.
+
+===ADR===
+
+## ADR-048: CI Dependency and Build Caching
+**Decision:** CI jobs cache the Go module download directory and the Go build cache using `actions/cache`, keyed on the hash of `go.sum` with a restore-key fallback to the most recent cache for the branch and then `main`. The cache is read-write on `main` and read-only on pull request branches. Docker layer caching uses the registry-backed `cache-from`/`cache-to` BuildKit mode against a dedicated cache repository. Caches are never used for correctness-sensitive steps: the `generate-check` and `migrations-check` jobs run cold by design. Cache entries expire under GitHub's standard eviction; no manual cache invalidation tooling is maintained.
+
+**Rationale:** Module and build caching cuts the median CI run from roughly nine minutes to under four, which is the difference between developers waiting on a result and context-switching away. Making PR branches read-only against the cache prevents an untrusted branch from poisoning entries that later runs on `main` would consume. Keeping correctness checks cold accepts a small time cost to guarantee that caching can never mask a real failure.
+
+===ADR===
+
+## ADR-049: Trunk-Based Development with Short-Lived Branches
+**Decision:** Ledger development follows trunk-based practice. All work happens on short-lived feature branches cut from `main` and merged back via pull request; the target lifetime for a branch is under three working days. Long-running release branches, develop branches, and environment branches are prohibited. Work too large for a small PR is decomposed behind feature flags (per ADR-019) so partial implementations can merge safely. Direct pushes to `main` are blocked for all users. Branch names follow `<username>/<ticket>-<slug>`. Stale branches with no commits for 30 days are deleted by a scheduled workflow after a notification to the author.
+
+**Rationale:** Short-lived branches keep merge conflicts small and reviews focused; the painful integration events the team experienced under a GitFlow model in a previous service were a direct function of branch age. Feature flags decouple deployment from release, allowing incomplete work to merge without exposure. Automated stale-branch cleanup keeps the branch list meaningful as a view of active work rather than an archaeological site.
+
+===ADR===
+
+## ADR-050: Merge Queue for main
+**Decision:** All merges into `main` go through GitHub's merge queue. The queue builds each pull request against the head of `main` plus any PRs ahead of it in the queue, runs the full required check matrix on that speculative merge result, and lands the PR only if checks pass in that context. Queue entries that fail are ejected and the author is notified; the queue does not attempt automatic re-entry. Maximum queue concurrency is set to five speculative builds. The "Update branch" button workflow is deprecated; authors no longer rebase manually to pick up `main` before merging.
+
+**Rationale:** Classic branch protection validates a PR against the `main` that existed when checks ran, not the `main` it will actually land on; two individually green PRs can break the trunk in combination, and this occurred three times in the service's first quarter. The merge queue closes that gap mechanically. Removing the manual update-and-rerun ritual also recovers reviewer and author time previously spent babysitting the merge race on busy days.
+
+===ADR===
+
+## ADR-051: Nightly Extended Test Suite
+**Decision:** A scheduled workflow runs every night at 02:00 UTC executing test categories too slow or too broad for the per-PR matrix: property-based tests with a 50× iteration multiplier, the full database migration sequence from version zero, fuzz targets for parsers (15 minutes per target), and the cross-version API compatibility suite. Failures open a GitHub issue labelled `nightly-failure` with the run link, assigned to the on-call engineer's triage queue. A nightly failure does not block merges, but two consecutive failures of the same category automatically escalate to a required-fix issue for the owning area. Results are summarised in a dashboard panel showing a 30-day pass-rate trend.
+
+**Rationale:** Pushing slow suites to a nightly cadence keeps PR feedback under the ten-minute budget while still exercising deep coverage daily. Auto-filed issues prevent the well-known failure mode where scheduled jobs quietly fail for weeks because no human watches them. The two-consecutive-failures escalation rule distinguishes environmental flakes from genuine regressions without requiring manual judgement each morning.
+
+===ADR===
+
+## ADR-052: Kubernetes Deployment via Helm Charts
+**Decision:** Ledger is deployed to Kubernetes using a Helm chart maintained in the service repository under `deploy/chart/`. The chart owns all Kubernetes objects for the service: Deployment, Service, HorizontalPodAutoscaler, PodDisruptionBudget, ServiceAccount, and NetworkPolicy. Environment-specific values live in `deploy/values/<env>.yaml`; secrets are referenced by name only, never templated into the chart. Chart changes version with the application — there is no separately versioned chart repository. `helm template` output is validated in CI with `kubeconform` against the cluster's Kubernetes version. Raw `kubectl apply` of hand-written manifests against any environment is prohibited.
+
+**Rationale:** Co-locating the chart with the code keeps deployment configuration changes in the same review and release unit as the behaviour they support, eliminating the version-matching problem of a separate chart repo. Schema validation in CI catches manifest errors at review time rather than at deploy time, where they previously surfaced as cryptic admission failures. A single sanctioned deployment path makes the cluster state explainable from the repository alone.
+
+===ADR===
+
+## ADR-053: GitOps Delivery with Argo CD
+**Decision:** All deployments of Ledger are reconciled by Argo CD from a dedicated `ledger-deploy` Git repository that records the desired image digest and values file per environment. CI updates the deploy repository by opening an automated commit after a successful image publish; humans change environments only by pull request to that repository. Argo CD runs with auto-sync enabled for dev and staging and manual sync approval for production. Direct `helm upgrade` or `kubectl` mutations against managed namespaces are detected as drift and reverted by the controller. Rollback is performed by reverting the deploy repository commit, never by imperative commands.
+
+**Rationale:** A Git repository as the single source of deployed state gives an ordered, attributable history of every environment change, which has repeatedly answered "what changed at 14:32?" during incident review. Automated drift reversion converts undocumented hotfixes from silent divergence into a visible, reviewable event. Keeping production behind a manual sync preserves a deliberate human decision point on the highest-blast-radius environment without sacrificing automation below it.
+
+===ADR===
+
+## ADR-054: Progressive Canary Rollouts
+**Decision:** Production deployments of Ledger use Argo Rollouts with a canary strategy. Traffic shifts through fixed steps — 5%, 25%, 50%, 100% — with a 10-minute analysis window at each step. The analysis template evaluates two Prometheus queries: HTTP 5xx ratio against a 1% threshold and p99 latency against a 750 ms threshold, both scoped to the canary pods via version labels. A failed analysis automatically shifts all traffic back to the stable ReplicaSet and marks the rollout degraded; promotion past 50% additionally requires a manual approval recorded in the rollout object. Database migrations must be compatible with both versions running concurrently (see ADR-064).
+
+**Rationale:** Step-wise exposure bounds the blast radius of a bad release to a small traffic fraction during the window when regressions are most likely to surface. Metric-gated promotion removes the human vigilance requirement from routine releases while the manual gate at 50% keeps a decision point for judgement that metrics cannot capture. Requiring dual-version schema compatibility is the precondition that makes automated rollback safe at any step.
+
+===ADR===
+
+## ADR-055: Fixed Environment Promotion Pipeline
+**Decision:** Ledger artifacts promote through exactly three environments in order: `dev`, `staging`, `production`. The same image digest moves through all three; rebuilding between environments is prohibited. Promotion from dev to staging is automatic on green CI. Promotion from staging to production requires the candidate to have run in staging for at least four hours and to have a passing synthetic check suite, and is initiated by a human via pull request to the deploy repository. Hotfixes follow the same path with the staging soak shortened to 30 minutes by an explicitly labelled override commit. No environment may run a digest that staging has never run.
+
+**Rationale:** Promoting a single immutable digest guarantees that what was validated is what runs in production — rebuilds reintroduce the possibility of dependency or toolchain drift between environments. The staging soak gives slow-burn defects (memory growth, connection leakage) time to surface where impact is contained. Making the hotfix override an explicit labelled commit preserves the audit trail of every occasion the standard bake time was bypassed and by whom.
+
+===ADR===
+
+## ADR-056: Image References Pinned by Digest
+**Decision:** All container image references in Ledger's deployment configuration use immutable digests (`@sha256:…`) rather than tags. CI publishes images with both a human-readable tag (`v1.14.2`, commit SHA) and resolves the digest immediately after push; only the digest enters the deploy repository. Kubernetes manifests, Helm values, and Argo CD applications must not reference `:latest` or any mutable tag, enforced by a conftest policy in the deploy repository's CI. Base images in Dockerfiles follow the same rule, with digests advanced by scheduled automation that opens a pull request when upstream publishes updates.
+
+**Rationale:** Tags are mutable pointers: a re-pushed tag can silently change what a cluster pulls on the next pod reschedule, producing version skew within a single Deployment that is extremely confusing to diagnose. Digests make every deployed artifact content-addressed and tamper-evident, which the security team requires for the PCI cardholder-data environment. Automated base-image bump PRs keep the convenience of tracking upstream patches without surrendering the immutability guarantee.
+
+===ADR===
+
+## ADR-057: Distributed Tracing with OpenTelemetry
+**Decision:** Ledger instruments all request paths with OpenTelemetry using the official Go SDK. Spans are created by shared middleware for every inbound HTTP request and by instrumented wrappers for outbound HTTP, database queries (via `otelpgx`), and Kafka produce/consume operations. Context propagation uses the W3C `traceparent` header exclusively; B3 propagation is not accepted or emitted. Spans export over OTLP/gRPC to the cluster-local OpenTelemetry Collector, which handles batching and forwarding to the tracing backend. Span attributes follow OpenTelemetry semantic conventions; custom attributes use the `ledger.` prefix. Manual span creation in business logic requires the span to record an error status on failure paths.
+
+**Rationale:** Vendor-neutral instrumentation means the tracing backend can change without touching application code — a realistic scenario given ongoing vendor cost negotiations. A single propagation format eliminates the trace-breaking header mismatches the team has seen between services with mixed B3/W3C configurations. Routing exports through the local collector centralises queueing and credentials so the application needs no backend-specific configuration.
+
+===ADR===
+
+## ADR-058: Head-Based Trace Sampling at the Edge
+**Decision:** Trace sampling for Ledger is decided head-based at the API gateway: 10% of inbound requests are sampled in production, 100% in dev and staging. The sampling decision rides the `traceparent` sampled flag, and all downstream services respect the parent decision — no service re-samples or up-samples mid-trace. Two categories override the 10% default to always-sample: requests carrying the internal `X-Debug-Trace: 1` header (settable only by employees through the admin proxy) and requests whose response status is set to 5xx, captured via a tail-hold buffer in the collector for that narrow case. Sampling rates are configuration, not code, and changes are recorded in the deploy repository.
+
+**Rationale:** Head-based sampling at a single decision point produces complete traces — partial traces from per-service sampling were the main complaint with the previous setup. Ten percent keeps tracing backend cost inside the observability budget while remaining statistically useful for latency analysis. The debug-header escape hatch gives engineers deterministic traces during investigations without raising the global rate.
+
+===ADR===
+
+## ADR-059: Service Level Objectives and Error Budgets
+**Decision:** Ledger defines three SLOs, measured over a rolling 30-day window from load-balancer metrics: availability (99.95% of requests complete without a 5xx), read latency (99% of GET requests under 300 ms), and write latency (99% of mutating requests under 800 ms). Each SLO has an error budget; budget consumption is displayed on the team dashboard and evaluated in the weekly operations review. When any budget is more than 75% consumed, feature deployments to production require engineering-manager signoff until the budget recovers below 50%. SLO definitions live in `deploy/slo/` as code and are provisioned into the monitoring system by CI.
+
+**Rationale:** Numeric objectives turn "is the service reliable enough?" from an opinion into a measurement, and the budget mechanism converts reliability into a currency that can be deliberately spent on release velocity. Gating deployments on budget exhaustion creates an automatic, pre-agreed slowdown instead of an ad-hoc argument during a bad month. Keeping definitions in the repository ensures the dashboard always reflects reviewed, versioned intent.
+
+===ADR===
+
+## ADR-060: Grafana Dashboards as Code
+**Decision:** All Grafana dashboards for Ledger are defined in code using Jsonnet with the Grafonnet library, stored under `deploy/dashboards/`, and provisioned by CI through the Grafana HTTP API into a folder the provisioning service account exclusively owns. Manual edits in the Grafana UI to provisioned dashboards are non-persistent; the UI is used for prototyping, after which panels are ported into Jsonnet. Each dashboard must declare an owner annotation and link to the relevant runbook. Shared panel definitions (standard latency, throughput, and saturation rows) live in a common Jsonnet library so every service dashboard presents the same top-row layout.
+
+**Rationale:** Code-defined dashboards get review, history, and rollback — hand-edited dashboards in the previous setup were routinely broken by well-intentioned tweaks with no record of what changed. A shared panel library means an engineer paged onto an unfamiliar service finds the same layout in the same places, which measurably shortens orientation time during incidents. Owner and runbook annotations make every dashboard actionable rather than decorative.
+
+===ADR===
+
+## ADR-061: Continuous Profiling with pprof
+**Decision:** Ledger exposes the standard `net/http/pprof` handlers on the internal port only, and runs the Parca agent as a DaemonSet collecting CPU and heap profiles from all pods at 19 Hz with 10-second windows. Profiles are retained for 14 days and queryable by version label, allowing before/after comparison across deployments. Ad-hoc profile capture during incidents uses `go tool pprof` against the internal port via `kubectl port-forward`; capturing from production requires no approval but must be noted in the incident channel. Benchmarks guarding known-hot paths (serialisation, ledger entry construction) run in the nightly suite with results tracked by `benchstat`.
+
+**Rationale:** Continuous profiles answer "what changed?" for performance regressions the way traces answer it for latency structure — the version-labelled comparison has already localised one allocation regression to a specific release in a sibling service. Restricting pprof to the internal port keeps the diagnostic surface off the public network. Nightly benchmark tracking catches gradual degradation that no single PR's reviewer would notice.
+
+===ADR===
+
+## ADR-062: Alert Definitions as Code
+**Decision:** All Prometheus alerting rules for Ledger live in `deploy/alerts/` as YAML, validated by `promtool` in CI and provisioned with the rest of the monitoring stack. Every alert must declare: a `severity` label (`page` or `ticket`), a `team` label, a `summary` annotation written for a responder with no prior context, and a `runbook_url` annotation pointing at a runbook section that exists — CI checks the link resolves. Alerts of severity `page` must be symptom-based (user-visible impact such as SLO burn rate), not cause-based; cause-based signals (disk pressure, replication lag) may only be `ticket` severity. New `page` alerts require review by the on-call rotation lead.
+
+**Rationale:** Symptom-based paging keeps night-time interruptions tied to actual user impact, which is the single biggest factor in sustainable on-call according to the team's own quarterly survey. The mandatory runbook link with CI verification eliminates the demoralising experience of being paged toward a dead link at 03:00. Versioned rules give the same review and rollback affordances as application code.
+
+===ADR===
+
+## ADR-063: Database Naming Conventions
+**Decision:** All PostgreSQL identifiers in the Ledger schema use `snake_case`. Tables are plural nouns (`accounts`, `ledger_entries`); join tables concatenate both parents in alphabetical order (`account_merchants`). Primary keys are named `id`; foreign keys are `<singular_parent>_id`. Indexes follow `idx_<table>_<columns>`; unique constraints `uq_<table>_<columns>`; check constraints `ck_<table>_<rule>`; foreign key constraints `fk_<table>_<parent>`. Timestamp columns end in `_at` (`created_at`, `archived_at`); boolean columns begin with `is_` or `has_`. Enumerated values are stored as `text` with a check constraint rather than native Postgres enums. Abbreviations are prohibited except `id`.
+
+**Rationale:** Mechanical naming rules remove a perpetual source of review bikeshedding and make any constraint or index findable by constructing its name rather than searching for it. Predictable constraint names matter operationally: error messages cite constraint names, and a consistent scheme lets responders identify the violated rule without opening the schema. Text-plus-check beats native enums because adding a value becomes an ordinary constraint swap rather than a type migration.
+
+===ADR===
+
+## ADR-064: Expand-Contract Schema Migrations
+**Decision:** Every Ledger schema change that touches existing structures follows the expand-contract pattern across at least two releases. Release N expands: new columns are added as nullable or with defaults, new tables are created, and the application writes to both old and new structures where applicable. Only after release N is fully rolled out and verified does release N+1 (or later) contract: old columns are dropped, constraints tightened, and dual-writes removed. A single migration may never combine an expand and a contract for the same structure. Destructive operations (DROP COLUMN, DROP TABLE) additionally require a comment in the migration file naming the release that stopped reading the structure.
+
+**Rationale:** During a rolling deploy or canary, two application versions run against one schema simultaneously; expand-contract is the discipline that makes this safe and is therefore a precondition for the automated rollback in ADR-054. Splitting expansion from contraction means rollback never encounters a schema the old binary cannot read. The named-release comment on destructive migrations creates a checkable audit trail for the most dangerous operation class.
+
+===ADR===
+
+## ADR-065: Concurrent Index Creation Policy
+**Decision:** All index creation and removal on existing Ledger tables in staging and production uses `CREATE INDEX CONCURRENTLY` / `DROP INDEX CONCURRENTLY`. Because concurrent index operations cannot run inside a transaction, such migrations are placed in their own migration file annotated with `-- migrate: no-transaction`, and the migration runner executes them outside the transactional wrapper. After a concurrent build, the migration must verify the index is valid (`pg_index.indisvalid`) and fail loudly if the build was aborted, since Postgres leaves an invalid index behind in that case. Index builds on tables above 10 million rows are scheduled through the database change calendar rather than deployed ad hoc.
+
+**Rationale:** A plain `CREATE INDEX` takes a lock that blocks writes for the duration of the build, which on the `ledger_entries` table would mean minutes of write unavailability — indistinguishable from an outage. The validity check exists because an aborted concurrent build leaves a half-built index that silently consumes write overhead while serving no queries. Calendar scheduling for large tables keeps heavy I/O away from peak traffic windows.
+
+===ADR===
+
+## ADR-066: Foreign Key and Constraint Discipline
+**Decision:** Every relationship between Ledger tables is enforced with a foreign key constraint in the database; application-level enforcement alone is not acceptable. Foreign keys default to `ON DELETE RESTRICT` — cascading deletes are prohibited except on pure child detail tables, where each use requires a justifying comment in the migration. All columns are `NOT NULL` unless nullability carries documented meaning. Domain rules expressible as check constraints (non-negative quantities, valid status values, date ordering) are encoded as check constraints with descriptive names per ADR-063. New constraints on populated tables are added as `NOT VALID` then validated in a follow-up migration to avoid long locks.
+
+**Rationale:** The database is the last line of defence against integrity violations from bugs, manual interventions, and future services sharing the schema; constraints make invalid states unrepresentable rather than merely unlikely. Restricting cascades prevents a single misdirected delete from silently fanning out through financial records. The `NOT VALID`-then-validate pattern gets full enforcement without the table-scan lock that has caused production latency spikes elsewhere.
+
+===ADR===
+
+## ADR-067: UUIDv7 Primary Keys
+**Decision:** All new Ledger tables use UUIDv7 primary keys, generated application-side via the `google/uuid` library and stored in the native `uuid` column type. Sequential integer keys are not used for new tables; existing integer-keyed tables are left as-is until a scheduled migration. UUIDs are exposed directly in API resources as the public identifier — no separate external ID mapping layer is maintained. Bulk insert paths must not assume ordering beyond the millisecond timestamp prefix. The choice of v7 over v4 is normative: random v4 keys are prohibited for primary keys because of their index locality behaviour.
+
+**Rationale:** Application-side generation lets the service construct complete object graphs before any database round trip, simplifying batch writes and outbox patterns. The v7 timestamp prefix preserves the B-tree insert locality that v4's full randomness destroys — random keys caused measurable index bloat and buffer-cache pressure in the prototype benchmarks. Using one identifier internally and externally eliminates a translation layer, and UUIDs leak no row-count information the way sequential integers do.
+
+===ADR===
+
+## ADR-068: Monthly Partitioning of Append-Heavy Tables
+**Decision:** The `ledger_entries` and `audit_log` tables are declaratively partitioned by range on `created_at`, one partition per calendar month. Partitions are created two months ahead by a scheduled job, and a safety default partition catches rows outside any defined range while alerting at `ticket` severity if it receives any rows. All queries against partitioned tables must carry a `created_at` predicate so the planner can prune partitions; the query layer enforces this with a required time-range argument on the relevant store methods. Detaching old partitions is the implementation mechanism for the retention policy defined in ADR-102; partitions are never deleted by ad-hoc SQL.
+
+**Rationale:** Monthly partitions keep indexes on the hottest data small enough to stay resident in memory, and make retention operations metadata-only (detach) rather than multi-hour `DELETE` storms with vacuum debt. The mandatory time predicate is what converts partitioning from a storage detail into an actual query win. The alerting default partition turns a misconfigured partition window from silent data misplacement into a visible operational signal.
+
+===ADR===
+
+## ADR-069: In-Process Cache for ISO Reference Data
+**Decision:** Ledger caches static ISO reference datasets — country codes (ISO 3166), currency codes (ISO 4217), and time zone identifiers — in process memory, loaded once at startup from embedded files compiled into the binary via `go:embed`. These datasets are read-only at runtime; there is no invalidation path, no TTL, and no remote fetch. Updates ship as ordinary code changes: the embedded files are regenerated from the upstream ISO publications by `make generate`, reviewed in a pull request, and rolled out with the next deploy. The cache package exposes lookup functions only; callers cannot enumerate-and-mutate the underlying maps.
+
+**Rationale:** ISO reference data changes a handful of times per year through a formal standards process, so deploy-time freshness is more than sufficient and runtime refresh machinery would be pure liability. Embedding removes both a startup network dependency and a class of "reference file missing in container" failures. Treating updates as code changes gives reviewable diffs when a country or currency entry actually changes — exactly the events worth human eyes.
+
+===ADR===
+
+## ADR-070: Currency Display Name Cache
+**Decision:** Human-readable currency display names (e.g., "Swiss Franc", "Japanese Yen") and their localised variants are served from an in-memory read-only cache built at startup from the CLDR data bundled with the i18n subsystem (ADR-105). The cache is keyed by `(currency_code, locale)` and is immutable for the process lifetime; a new CLDR version requires a deploy. The dataset is reference data only — display strings for UI rendering — and the cache must never be extended to hold per-request or per-account data; the package's lint rule rejects writes after initialisation. Lookups fall back from the requested locale to its parent locale and finally to English.
+
+**Rationale:** Display names are consulted on every rendered statement line, so a map lookup versus a database read is the difference between nanoseconds and a network round trip on a hot path. The data changes only when CLDR releases — a deploy-cadence event, not a runtime one — so immutability is correctness, not a limitation. The structural write prohibition keeps a convenient in-memory map from gradually becoming an unbounded, unprincipled general-purpose cache.
+
+===ADR===
+
+## ADR-071: Reference Dataset Versioning Convention
+**Decision:** Every read-only reference dataset consumed by Ledger (ISO tables, CLDR display data, MCC category descriptions, holiday calendars) carries an explicit dataset version recorded in `internal/refdata/versions.go` as a constant alongside its source URL and acquisition date. The version string is exposed on the `ledger version` subcommand output and as a label on the `ledger_refdata_info` metric. Regeneration tooling refuses to update a dataset without bumping its version constant in the same change. Cache keys for any externally materialised copy of a reference dataset must embed the dataset version so that two binary versions never read each other's entries.
+
+**Rationale:** Reference data bugs are uniquely confusing because the data looks like code but changes on an external authority's schedule; recording version, source, and date makes "which edition of the country list is production running?" answerable in seconds. Version-embedded cache keys eliminate cross-version contamination during rolling deploys without any coordination protocol. The metric label lets dashboards confirm fleet-wide dataset consistency after a rollout.
+
+===ADR===
+
+## ADR-072: API Deprecation Signalling Policy
+**Decision:** When a Ledger API version, endpoint, or field is scheduled for removal, deprecation is signalled in three mandatory channels: the `Deprecation` response header (RFC 9745) with the deprecation date and a `Sunset` header with the removal date; a `deprecated: true` marker with a `x-sunset` extension in the OpenAPI document; and an entry in `CHANGELOG.md` under a "Deprecations" heading. The minimum window between deprecation announcement and removal is six months for fields and endpoints, twelve months for whole versions (per ADR-022). Monthly usage reports of deprecated surface, derived from gateway logs, are sent to integrators still calling it.
+
+**Rationale:** Integrators discover deprecations through different channels — some read headers programmatically, some watch the spec, some read release notes — so signalling in all three is the only way to reach the full population. Fixed minimum windows replace per-deprecation negotiation with a published contract. Usage-based outreach targets exactly the integrators who have not migrated, which in the gateway team's experience is what actually empties a deprecated endpoint.
+
+===ADR===
+
+## ADR-073: OpenAPI Specification as Contract Source of Truth
+**Decision:** The Ledger API is defined spec-first in an OpenAPI 3.1 document at `api/openapi.yaml`. Handler request/response types are generated from the spec via `oapi-codegen`; hand-written types for API payloads are prohibited. Pull requests that change the spec must include regenerated code (enforced by the `generate-check` job) and a changelog entry. CI runs `oasdiff` between the PR's spec and `main`'s, failing on any change classified as breaking unless the PR carries the `api-breaking-approved` label, which only API guild members may apply. The published developer documentation renders directly from the same file.
+
+**Rationale:** Generating code from the spec makes drift between documentation and behaviour structurally impossible, where the previous code-first annotation approach drifted within weeks. Mechanical breaking-change detection moves compatibility review from "hopefully a reviewer notices" to a deterministic gate with a deliberate, labelled escape hatch. A single source file feeding code, docs, and diff tooling means every consumer of the contract is reading the same truth.
+
+===ADR===
+
+## ADR-074: Additive Change Review Checklist
+**Decision:** Additive API changes within an existing version (new optional fields, new endpoints, new enum values) require a lightweight checklist completed in the pull request description: (1) the field/endpoint is absent-tolerant — old clients ignoring it lose nothing; (2) new enum values are confirmed safe against the documented client guidance that unknown values must be handled; (3) defaults preserve existing behaviour for callers who do not send the new field; (4) the OpenAPI spec, generated code, and changelog all change in this PR; (5) examples in the spec are updated. The checklist is a PR template section; reviewers must not approve API-labelled PRs with an incomplete checklist.
+
+**Rationale:** "Additive therefore safe" is mostly true and occasionally catastrophically false — a new enum value sent to a client that exhaustively switches on known values is technically additive and still breaks them. The checklist encodes the specific failure modes the team has actually encountered rather than general caution. Keeping it in the PR template makes compliance visible at review time with near-zero process overhead.
+
+===ADR===
+
+## ADR-075: Package Layout and the internal Boundary
+**Decision:** Ledger follows a fixed repository layout: `cmd/<binary>/` contains main packages only (flag parsing and wiring); all application code lives under `internal/`, preventing import by other modules; there is no `pkg/` directory. Within `internal/`, packages are organised by domain capability (`internal/account`, `internal/entry`, `internal/statement`) rather than by technical layer — `internal/models`, `internal/utils`, and `internal/helpers` are prohibited names. Cross-cutting infrastructure lives in narrowly named packages (`internal/store`, `internal/cache`, `internal/flags`). Package import cycles are prevented by depgraph checks in CI, and any package exceeding 4,000 lines triggers a review for splitting along capability lines.
+
+**Rationale:** Capability-oriented packages keep a feature's types, logic, and queries in one place, so a change request maps to one directory rather than a layer-by-layer scavenger hunt. The `internal/` boundary preserves freedom to refactor without the de facto public API that a `pkg/` directory creates. Prohibiting junk-drawer package names removes the gravitational wells where unowned code accumulates and couples everything to everything.
+
+===ADR===
+
+## ADR-076: Error Wrapping and Sentinel Conventions
+**Decision:** Errors in Ledger are wrapped at each layer boundary with `fmt.Errorf("<operation>: %w", err)`, where the operation string names what was being attempted, not the error received. Callers branch on errors exclusively via `errors.Is` against exported sentinel values (`store.ErrNotFound`, `entry.ErrVersionConflict`) or `errors.As` against exported error types; string matching on error text is prohibited and lint-flagged. Sentinels are declared in the package that detects the condition. Error strings are lower-case, contain no trailing punctuation, and must not duplicate context the wrap chain already carries. The HTTP layer is the only place errors are translated into status codes, via a single `errToStatus` mapping.
+
+**Rationale:** Consistent `%w` wrapping yields error chains that read as a narrative of the failed operation path, which is most of the diagnostic value of an error message. Sentinel-based branching survives message rewording, whereas the string matching it replaces broke twice during copy edits. Centralising status mapping in one function keeps the API's error contract reviewable in one place instead of scattered across handlers.
+
+===ADR===
+
+## ADR-077: context.Context Discipline
+**Decision:** Every function in Ledger that performs I/O, blocks, or calls something that does takes `ctx context.Context` as its first parameter. Contexts are never stored in struct fields; they flow through call chains explicitly. Request-scoped values carried on the context are limited to an allowlist defined in `internal/ctxkeys`: request ID, authenticated principal, and locale — business data in context values is prohibited. `context.Background()` may appear only in `main`, tests, and the small set of documented detached-work sites (audit flush on shutdown), each annotated with a comment. Deadlines are set at the boundary that knows the budget: the HTTP middleware sets a per-request deadline of 25 seconds, and store methods must honour cancellation.
+
+**Rationale:** Uniform context threading is what makes timeouts, cancellation, and trace propagation work end-to-end; a single context-less gap in a call chain silently severs all three. The value allowlist prevents context from degenerating into an untyped global parameter bag, a failure the team has inherited and regretted in older services. Annotated `Background()` sites make detached work a visible, countable exception rather than an accident.
+
+===ADR===
+
+## ADR-078: Interfaces Defined at the Consumer
+**Decision:** Go interfaces in Ledger are declared in the package that consumes the behaviour, not the package that implements it. A package needing storage declares the minimal interface it requires (often one to three methods) and accepts it via constructor injection; `internal/store` exports concrete types only. Premature interface extraction is prohibited: a type gets an interface when a second implementation or a consumer-side seam actually exists, not speculatively. Single-method interfaces are preferred and named with the `-er` convention where natural. The lint configuration flags exported interfaces in implementation packages for review.
+
+**Rationale:** Consumer-side interfaces keep each dependency surface honest — a report generator that needs two read methods should not depend on a forty-method store interface it mostly ignores. This is the orientation the standard library models (`io.Reader` lives with its consumers' needs, not with files or buffers). Banning speculative interfaces removes a layer of indirection that, in practice, was navigated on every code read while paying off in almost none.
+
+===ADR===
+
+## ADR-079: gofumpt Formatting and Import Grouping
+**Decision:** All Go code in Ledger is formatted with `gofumpt` (a stricter superset of `gofmt`), enforced by the lint gate; unformatted code cannot merge. Imports are grouped into exactly three blocks separated by blank lines — standard library, external modules, and `github.com/ledger-pay/ledger/...` internal packages — enforced by `gci` with the project prefix configured. Editor configuration committed in `.vscode/` and an `.editorconfig` apply format-on-save for the two editors the team supports. Formatting-only changes must ship as dedicated PRs labelled `format-only` and are excluded from code-review-depth expectations; mixing reformatting with logic changes in one commit is prohibited.
+
+**Rationale:** A machine-enforced single style ends formatting discussion permanently and makes diffs reflect only semantic change. gofumpt over plain gofmt removes the residual inconsistencies (octal literals, unnecessary conversions) that still generated review nits. Isolating reformatting commits keeps `git blame` useful for the question it actually serves — why a line's logic is what it is — instead of pointing at a formatting sweep.
+
+===ADR===
+
+## ADR-080: Minimal Dependency Policy
+**Decision:** Adding a new direct dependency to Ledger requires answering, in the pull request description: what the dependency does that the standard library or an existing dependency cannot; its maintenance signals (release cadence, open issue triage, bus factor); its transitive dependency count; and its licence (per ADR-083). Dependencies for trivial functionality — left-pad-class utilities, single-function helpers — are rejected in favour of writing the code in-repo with tests. The platform team reviews all `go.mod` additions via CODEOWNERS. Existing dependencies are re-justified annually during the dependency audit; unmaintained dependencies (no release or triage activity for 18 months) must be replaced, forked per ADR-084, or have their usage removed.
+
+**Rationale:** Every dependency is an ongoing liability — a supply-chain surface, an upgrade treadmill, and a constraint on toolchain moves — and the cost arrives later while the convenience arrives now, which biases decisions toward over-adoption. A written justification at addition time corrects that asymmetry cheaply. The annual re-justification catches the dependencies whose ecosystems quietly died, which never announce themselves.
+
+===ADR===
+
+## ADR-081: Automated Dependency Update Cadence
+**Decision:** Renovate manages dependency updates for Ledger with a weekly schedule (Monday 06:00 UTC). Updates are grouped: all patch-level Go module bumps in one PR, minor-level bumps in a second, and each major bump in its own PR with the upstream changelog linked. Security advisories override the schedule and open immediately. Automerge is enabled only for patch-level updates of dependencies on the explicit `trusted-automerge` list (currently the OpenTelemetry SDK, AWS SDK, and golangci-lint), and only after the full required check matrix passes. Major version bumps require a human to confirm behavioural review, not just green CI, recorded as a PR comment.
+
+**Rationale:** Weekly grouped updates amortise review effort into a predictable ritual instead of a daily drizzle of single-bump PRs that train reviewers to rubber-stamp. Keeping majors isolated with changelogs attached concentrates attention where breaking changes actually live. The narrow automerge list captures most of the toil reduction while ensuring nothing outside a deliberately trusted set lands without human eyes.
+
+===ADR===
+
+## ADR-082: Module Proxy Instead of Vendoring
+**Decision:** Ledger does not vendor dependencies; there is no `vendor/` directory. Builds resolve modules through the organisation's Athens proxy (`GOPROXY=https://goproxy.internal,direct` with `GONOSUMCHECK` unset and `GOSUMDB` enabled), which caches every module version ever fetched and is backed up like any other persistence tier. `go.sum` is the integrity anchor: CI runs `go mod verify`, and `go mod tidy` cleanliness is a required check. Direct fetches from upstream version control hosts are blocked at the network level for CI runners, forcing all resolution through the proxy.
+
+**Rationale:** The proxy provides the availability guarantee that vendoring is usually adopted for — upstream deletions or outages cannot break builds — without the costs vendoring imposes: bloated diffs that bury real changes, multi-megabyte repository growth, and the recurring confusion of editing a vendored file. The checksum database plus `go.sum` already provides tamper evidence cryptographically, so vendoring adds no integrity that isn't already present. Blocking direct fetches makes the guarantee total rather than probabilistic.
+
+===ADR===
+
+## ADR-083: Dependency Licence Allowlist
+**Decision:** Ledger dependencies must carry a licence on the approved allowlist: MIT, BSD-2-Clause, BSD-3-Clause, Apache-2.0, ISC, and MPL-2.0 (file-level copyleft accepted). GPL, AGPL, LGPL, SSPL, and source-available commercial licences (BUSL and similar) are prohibited in the dependency tree at any depth. Enforcement is automated: `go-licenses` runs in CI against the full transitive closure and fails the build on any disallowed or undetectable licence. Exceptions require written approval from legal counsel recorded in `docs/licensing-exceptions.md` with the dependency, version range, and justification; no exception is currently granted.
+
+**Rationale:** Licence obligations attach at distribution and audit time, long after the engineering decision that incurred them, so the cheap moment to enforce policy is dependency addition — exactly where the CI gate sits. Checking the transitive closure matters because copyleft obligations propagate through indirect dependencies that no human reviews. The written-exception register keeps the policy honest: either the gate's output is the truth, or a documented decision says otherwise.
+
+===ADR===
+
+## ADR-084: Internal Fork Policy for Dependencies
+**Decision:** When an upstream dependency requires a patch Ledger cannot wait for, the module is forked into the organisation's `forks/` GitHub namespace and consumed via a `replace` directive in `go.mod`. Every fork must have: an `UPSTREAM.md` recording the upstream repository, the forked commit, the reason, and links to the upstream issue or pull request where the patch was submitted; a quarterly review entry in the dependency audit checking whether upstream has absorbed the change; and a single maintainer of record. Forks that diverge beyond the documented patch set are escalated to a build-versus-replace decision. Long-term private divergence is explicitly a failure state, not a strategy.
+
+**Rationale:** Forking is sometimes unavoidable, but unmanaged forks rot silently — the patch's author leaves, upstream moves on, and the `replace` directive becomes an unexplained landmine during upgrades. The mandatory upstream submission keeps the fork's intended lifespan short and honest. The quarterly review converts "we should check if we still need this" from a vague intention into a scheduled, owned task with a recorded outcome.
+
+===ADR===
+
+## ADR-085: Table-Driven Test Convention
+**Decision:** Unit tests in Ledger use the table-driven style as the default structure: a slice of named case structs iterated with `t.Run(tc.name, …)`, giving each case an addressable subtest. Case names are short snake_case phrases describing the scenario (`empty_account_list`, `cursor_past_end`). Each case declares inputs and expected outputs explicitly; shared setup lives in a helper marked with `t.Helper()`. Assertions use `google/go-cmp` with `cmp.Diff` for structured comparisons — bare `reflect.DeepEqual` with a hand-rolled error message is lint-flagged. Deviation from table style is acceptable when a test has genuinely one scenario, but a second copy-pasted scenario triggers conversion.
+
+**Rationale:** Tables make the scenario inventory of a function visible at a glance and reduce the marginal cost of adding a case to a few lines, which is what actually determines whether edge cases get tested. Named subtests give precise failure output and allow running a single case via `-run`. `cmp.Diff` output shows exactly which field diverged, eliminating the print-both-values-and-squint debugging ritual the previous assertion style required.
+
+===ADR===
+
+## ADR-086: Integration Tests with Testcontainers
+**Decision:** Integration tests for Ledger run against real infrastructure provisioned per test run via `testcontainers-go`: PostgreSQL (same major version as production), Redis, and Kafka in single-broker mode. Containers start once per package in `TestMain` and are shared across that package's tests; each test isolates itself with a uniquely named schema or key prefix and cleans up via `t.Cleanup`. Integration tests live alongside unit tests, gated by the `integration` build tag, and run in CI as a dedicated required job. In-memory fakes of infrastructure (SQLite standing in for Postgres, map-backed "Redis") are prohibited in integration suites.
+
+**Rationale:** The defects integration tests exist to catch — SQL dialect specifics, constraint behaviour, serialisation through real wire protocols — are exactly the ones in-memory substitutes hide; SQLite-as-Postgres famously passes tests that production then fails. Per-package shared containers amortise startup cost to keep the suite under the CI time budget while schema-level isolation preserves test independence. The build tag keeps the fast unit loop fast for local development.
+
+===ADR===
+
+## ADR-087: Code Coverage Thresholds
+**Decision:** CI computes Go coverage on every pull request and enforces two thresholds: total project coverage must not fall below 75%, and the patch coverage of changed lines must be at least 80%. Coverage is informational, not a target to maximise — pull requests must not include tests whose sole purpose is threshold satisfaction, and reviewers are instructed to reject assertion-free "coverage tests". Generated code, `cmd/` wiring, and test helpers are excluded from measurement via the coverage configuration. Threshold changes require a platform team decision recorded as an amendment to this ADR; per-PR overrides use a `coverage-exempt` label restricted to maintainers, each use requiring a justification comment.
+
+**Rationale:** The patch threshold is the load-bearing one: it prevents new code from arriving untested without demanding retroactive coverage of legacy paths, which is how teams end up gaming totals. The explicit anti-gaming instruction acknowledges Goodhart's law in writing — the number is a smoke detector, not a goal. Exclusions keep the metric describing code where coverage means something.
+
+===ADR===
+
+## ADR-088: Golden File Testing for Serialised Output
+**Decision:** Tests that verify serialised artifacts — JSON API responses, rendered statement documents, generated CSV exports — compare output against golden files stored under `testdata/golden/`. Tests accept an `-update` flag that regenerates goldens from current output; regenerated goldens are reviewed as part of the pull request diff like any code change. Golden content must be deterministic: timestamps, generated IDs, and ordering are normalised through a shared scrubber before comparison. Each golden file maps to exactly one test case and carries the case name in its filename. Goldens above 100 KB require justification, since diffs at that size stop being reviewable.
+
+**Rationale:** Golden comparison verifies the full shape of an artifact rather than the handful of fields an author remembered to assert, catching unintended structural drift — field renames, ordering changes, accidental additions — that point assertions miss by construction. Putting goldens through code review turns every output change into a visible, deliberate decision. The determinism requirement exists because flaky goldens get reflexively regenerated, which silently converts the safety net into a rubber stamp.
+
+===ADR===
+
+## ADR-089: Race Detector Required in CI
+**Decision:** The unit and integration test jobs in CI run with `-race` unconditionally; there is no race-disabled test path to green. Code that fails under the detector is treated as broken regardless of whether the race has produced an observable failure. Suppressing the detector for a package is not supported; where third-party code races internally, the dependency is patched, replaced, or isolated behind a process boundary, with the decision documented. Locally, `make test` enables the detector by default and `make test-fast` provides the unraced variant for tight loops. The nightly suite additionally runs the race-enabled tests with `-count=3` to vary interleavings.
+
+**Rationale:** Data races are the defect class with the worst ratio of production pain to test-time visibility — they surface as rare, unreproducible corruption, and a financial ledger cannot tolerate "rare corruption". The detector only reports races in interleavings that actually execute, so refusing a non-race path and adding repeated nightly runs maximises the interleavings explored. Treating detector findings as broken-by-definition forecloses the "it hasn't actually failed yet" argument before it starts.
+
+===ADR===
+
+## ADR-090: Real Database in Tests — No Store Mocks
+**Decision:** Tests in Ledger do not mock the data layer. Code paths that touch storage are tested through the real `internal/store` package against the testcontainers Postgres instance (ADR-086). Mock generation is permitted only for true external boundaries — third-party HTTP APIs, the Kafka producer interface, the clock — listed explicitly in `internal/mocks/ALLOWED.md`. Adding a mock target to that list requires platform review. Where a unit test needs storage but the behaviour under test is not storage-related, lightweight in-repo fixture builders construct real rows rather than stubbing the store interface.
+
+**Rationale:** Store mocks verify that code calls the store the way the test author imagined, not that the interaction is correct — query mistakes, constraint violations, and transaction misuse all pass against a mock and fail against Postgres. The team's experience is that mock-heavy data tests rot into change-detector tests that break on refactors and miss real bugs. Restricting mocks to genuine process-external boundaries keeps test doubles where they model reality rather than replace it.
+
+===ADR===
+
+## ADR-091: Scheduled Secret and Key Rotation
+**Decision:** Every secret consumed by Ledger has a documented rotation schedule recorded in the Vault metadata for its path: database credentials rotate every 90 days via Vault's database secrets engine; HMAC signing keys rotate every 180 days using a two-key overlap window during which both current and previous keys validate; third-party API credentials rotate on the schedule each vendor supports, tracked in the same metadata. Rotation is executed by automation, not humans; a rotation that cannot be automated must be documented as an accepted exception with a quarterly manual procedure. The `ledger_secret_age_days` metric exposes per-secret age, alerting at `ticket` severity when any secret exceeds 110% of its scheduled lifetime.
+
+**Rationale:** Secrets that never rotate accumulate exposure: every departed employee, leaked log line, and copied laptop extends the window a stale credential can be abused. Automation is the difference between a rotation policy and a rotation aspiration — manual schedules quietly slip. The age metric closes the loop by making policy violations observable rather than discoverable only during audits.
+
+===ADR===
+
+## ADR-092: Pre-Commit and CI Secret Scanning
+**Decision:** Ledger runs `gitleaks` in two places: as a pre-commit hook installed by `make setup` on developer machines, and as a required CI job scanning the full diff of every pull request plus a weekly full-history scan. The ruleset extends the defaults with patterns for the organisation's internal credential formats (Vault AppRole identifiers, internal API key prefixes). Findings block the merge; false positives are suppressed via a reviewed `.gitleaksignore` entry citing the finding fingerprint, never by disabling a rule. A confirmed committed secret triggers the credential-exposure runbook: immediate revocation and rotation of the exposed value, followed by history rewriting only if legal requires it — revocation, not history cleanup, is the primary remedy.
+
+**Rationale:** Secrets enter repositories through ordinary human error, and the cost asymmetry is extreme: a one-second scan versus a credential exposed in history indefinitely. Scanning both pre-commit and in CI covers contributors without hooks installed. Treating revocation as the remedy reflects reality — once pushed, a value must be assumed copied, and rewriting history provides comfort, not security.
+
+===ADR===
+
+## ADR-093: Environment Separation of Secrets
+**Decision:** Secrets are strictly partitioned by environment: dev, staging, and production each have a distinct Vault namespace, distinct database credentials, distinct signing keys, and distinct third-party vendor accounts (sandbox versus production where vendors offer them). No secret value may be shared across environments; CI verifies that staging and production Vault paths contain no identical values via a hash-comparison job with read access to digests only. Production secrets are readable only by the production service identity and the break-glass role, which requires two-person approval and logs an audit event reviewed in the weekly operations meeting. Developers never receive production secret values; production debugging uses the audited break-glass path.
+
+**Rationale:** Shared secrets collapse environment isolation: a value handled carelessly in dev — pasted into a script, captured in a fixture — becomes a production credential exposure. Distinct vendor accounts also keep test traffic out of production rate ceilings and reporting. The digest-comparison check converts "we believe they're separate" into a continuously verified property, and the break-glass audit trail keeps the rare exception accountable.
+
+===ADR===
+
+## ADR-094: Kubernetes DNS for Service Discovery
+**Decision:** Ledger discovers internal services exclusively through Kubernetes DNS: dependencies are addressed as `<service>.<namespace>.svc.cluster.local`, with the short `<service>.<namespace>` form permitted in configuration. No service registry (Consul, Eureka) is deployed, and applications must not enumerate endpoints via the Kubernetes API. Service addresses are injected through environment variables in the Helm chart values rather than hardcoded, so a dependency can be repointed per environment. Cross-namespace calls require an entry in the destination's NetworkPolicy; the chart templates both sides from a single declared dependency list in `values.yaml`.
+
+**Rationale:** The cluster already maintains an authoritative, health-aware endpoint catalogue; running a parallel registry would duplicate that state and introduce a second system whose disagreements with the first become an outage class of their own. DNS-based addressing keeps applications portable across namespaces and clusters with configuration-only changes. Generating NetworkPolicy from the declared dependency list makes the service's communication graph reviewable in one file and enforced rather than aspirational.
+
+===ADR===
+
+## ADR-095: Internal Service Naming Convention
+**Decision:** Internal services in the payments platform follow a fixed naming grammar: a single lowercase word or hyphenated pair naming the capability (`ledger`, `statement-render`, `merchant-directory`), identical across the Kubernetes Service name, the Helm release, the repository name, the image repository, the metric `service` label, and the log `service` field. Names must not encode team names, project codenames, or technology choices (`-svc`, `-api`, `-v2` suffixes are prohibited; versioning belongs to the API path, not the service name). Renames are treated as migrations with a documented alias window, not as casual edits. A registry of names with owners lives in the platform team's `services.yaml`, which provisioning tooling validates against.
+
+**Rationale:** A service is referenced from a dozen systems — dashboards, alerts, traces, network policies, deploy repos — and any divergence among them imposes a translation step on every responder during exactly the moments translation is most costly. Excluding codenames and technology from names keeps them stable across rewrites and team reorganisations. The validated registry prevents the namespace from accreting near-duplicates.
+
+===ADR===
+
+## ADR-096: Headless Services for Direct Pod Addressing
+**Decision:** Components that must address individual pods rather than a load-balanced virtual IP — the Kafka client's broker bootstrap, the Postgres replica reader that distributes queries across read replicas, and the distributed cache warmer that must touch every peer — use Kubernetes headless Services (`clusterIP: None`), resolving the DNS name to the full set of pod A records. All ordinary request/response traffic continues to use standard ClusterIP services; choosing headless addressing for a new use case requires a documented reason in the chart. Clients consuming headless DNS must re-resolve on their library's standard refresh interval rather than caching the record set for the process lifetime, and must tolerate membership changes between resolutions.
+
+**Rationale:** Per-pod addressing is occasionally a genuine requirement, but it shifts endpoint-set management from the platform into application code, so it should be a deliberate exception rather than a default. Naming the approved use cases keeps that boundary explicit. The re-resolution requirement addresses the recurring failure where a client pins pod IPs from startup and degrades after the first rolling restart.
+
+===ADR===
+
+## ADR-097: Kafka as the Event Backbone
+**Decision:** Asynchronous communication between Ledger and other platform services flows through the shared Kafka cluster. Ledger publishes domain events (account lifecycle, entry posted, statement generated) as facts about committed state changes; events are emitted via a transactional outbox table drained by a relay process, so an event exists if and only if the corresponding database transaction committed. Events are encoded as Protobuf with schemas registered in the schema registry under compatibility mode `BACKWARD`. Direct service-to-service queues (RabbitMQ, SQS) are not used for inter-service messaging; point-to-point needs are modelled as Kafka topics with a single consuming service.
+
+**Rationale:** A single messaging substrate concentrates operational expertise, monitoring, and capacity planning instead of spreading them across heterogeneous brokers. The outbox pattern closes the dual-write gap — publishing directly from application code can emit events for transactions that subsequently roll back, which for financial state is unacceptable. Registry-enforced backward compatibility lets consumers upgrade on their own schedule, decoupling team release cadences.
+
+===ADR===
+
+## ADR-098: Kafka Topic Naming and Ownership
+**Decision:** Kafka topics follow the naming grammar `<domain>.<entity>.<event-class>.v<schema-major>` — for example `ledger.entry.posted.v1` and `ledger.account.lifecycle.v1`. Every topic has exactly one producing service, which owns the topic: its schema evolution, its capacity requests, and its documentation page. Consumers never write to a topic they do not own. Topic creation is declarative through the platform's Terraform module — auto-creation is disabled cluster-wide — and each topic declaration records owner, schema reference, partition count rationale, and retention setting. A topic's major version increments only on incompatible schema change, with the old version kept alive until registered consumers drain.
+
+**Rationale:** Naming that encodes domain, entity, and version makes a topic's content and compatibility contract legible from its name alone, which matters in a cluster shared by dozens of teams. Single-writer ownership gives every schema question an unambiguous answering party and prevents the multi-producer drift that makes topics untrustworthy. Declarative creation puts capacity and retention decisions through review instead of letting defaults accrete.
+
+===ADR===
+
+## ADR-099: Partitioning and Keying Strategy
+**Decision:** Ledger's Kafka topics are keyed by `account_id`, guaranteeing per-account ordering, which is the only ordering the platform promises consumers; cross-account global ordering is explicitly not provided. Partition counts are sized at topic creation from projected peak throughput with 3× headroom and recorded with their rationale; the standard counts are 12 for high-volume event topics and 3 for low-volume lifecycle topics. Because repartitioning breaks key-to-partition mapping, partition increases on keyed topics require a migration plan (new topic version, dual-publish window) rather than an in-place count change. Producers use the default murmur2 partitioner; custom partitioners are prohibited.
+
+**Rationale:** Per-account ordering matches the domain's actual invariant — an account's history must be sequential, while ordering between unrelated accounts is meaningless — and pretending global order exists would constrain throughput for no consumer benefit. Documented headroom-based sizing prevents both the under-provisioning that forces disruptive repartitioning and the cargo-cult 100-partition defaults that waste cluster resources. Banning custom partitioners keeps the key contract the whole platform can reason about.
+
+===ADR===
+
+## ADR-100: One Consumer Group per Service per Concern
+**Decision:** Each consuming service subscribes to Ledger topics with consumer groups named `<service>.<purpose>` (for example `statement-render.entry-projection`, `analytics.warehouse-load`). A consumer group serves exactly one logical concern; bundling unrelated processing behind one group is prohibited because the concerns then share offset progress and failure impact. Within a service, distinct concerns over the same topic use distinct groups so each maintains independent offsets. Group membership scales horizontally up to the topic's partition count, and deployments must tolerate rebalances at any time. Consumer lag per group is exported to Prometheus, with `ticket`-severity alerts when lag exceeds the concern's documented staleness budget.
+
+**Rationale:** The consumer group is Kafka's unit of progress tracking, so its boundaries should match the units the team reasons about: one concern, one offset history, one staleness budget. Shared groups create the misleading failure mode where a defect in one processing path stalls an unrelated one. Naming groups by service and purpose makes the lag dashboard self-explanatory during incidents instead of requiring tribal knowledge.
+
+===ADR===
+
+## ADR-101: Application Log Retention Tiers
+**Decision:** Ledger's application logs are retained in two tiers. The hot tier — indexed and queryable in the log platform — retains 30 days for production and 7 days for non-production environments. The archive tier stores compressed raw log batches in S3 with object lock, retained for 13 months, queryable via Athena for investigations that exceed the hot window. Log volume budgets are enforced per service: production emission above 5 GB/day sustained triggers a `ticket` alert to the owning team to reduce verbosity. Debug-level logging in production may be enabled per component for at most 24 hours via a feature flag that auto-reverts.
+
+**Rationale:** Hot log indexing is among the most expensive line items in the observability budget, and incident investigations overwhelmingly query the last few days — 30 days covers the realistic window while the cheap archive preserves the long tail for audits and rare deep investigations. The 13-month archive spans a full year plus one month of comparison overlap. Auto-reverting debug flags prevent the well-known ratchet where temporary verbosity becomes permanent cost.
+
+===ADR===
+
+## ADR-102: Audit Log Retention and Archival
+**Decision:** Rows in the `audit_log` table (ADR-026) are retained online for 25 months, after which monthly partitions (ADR-068) are detached, exported to Parquet in the compliance S3 bucket with object lock in governance mode, verified by row-count and checksum comparison, and only then dropped. Archived audit data is retained for 7 years from creation in accordance with the records-retention schedule approved by compliance, then deleted by lifecycle policy. Restoration of archived partitions for investigations follows a documented runbook and lands in a dedicated read-only schema, never back into the live table. The export job's verification failures page the on-call engineer; an unverified export blocks the partition drop indefinitely.
+
+**Rationale:** Seven-year retention follows the financial record-keeping obligations the compliance team has mapped for the markets Ledger operates in, while 25 months online keeps the live table sized for its actual query patterns — two full years of comparison plus a margin. Verify-before-drop ordering makes data loss require two independent failures. Object lock prevents even privileged accounts from quietly truncating history.
+
+===ADR===
+
+## ADR-103: Personal Data Minimisation and Anonymisation
+**Decision:** Ledger stores personal data only where a documented processing purpose exists, recorded per column in `docs/data-inventory.yaml` with its lawful basis and retention period. Closed accounts enter anonymisation 90 days after closure: direct identifiers (names, email addresses, phone numbers) are overwritten with deterministic placeholder values, while the financial records themselves are preserved under the retention schedule with only a pseudonymous account reference. Free-text fields are prohibited in any table that financial records reference, because free text cannot be reliably scrubbed. New columns containing personal data require a data-inventory entry in the same pull request, enforced by a CI check that compares migration diffs against the inventory.
+
+**Rationale:** Data protection regulation grants erasure rights that collide with financial record-keeping obligations; anonymising identifiers while preserving the transactional skeleton is the established reconciliation of the two. The column-level inventory makes subject-access and deletion requests mechanical rather than archaeological. Banning free text near financial records closes the loophole through which unscrubable personal data otherwise leaks into permanent retention.
+
+===ADR===
+
+## ADR-104: Backup Strategy and Restore Verification
+**Decision:** The Ledger PostgreSQL cluster takes nightly full base backups and ships WAL continuously to S3 via `pgBackRest`, providing point-in-time recovery with a 5-minute recovery point objective. Backups are retained 35 days; the monthly backup closest to month-end is additionally copied to a second region and retained 13 months. Every Sunday, automation restores the latest backup into an isolated environment, replays WAL to a random timestamp within the past day, and runs a verification suite: row counts on core tables, ledger balance invariant checks, and schema version confirmation. A failed restore verification pages the on-call engineer at `page` severity — it is treated as equivalent to having no backup.
+
+**Rationale:** An unrestored backup is a hypothesis, and the industry's recurring data-loss postmortems are overwhelmingly about backups that existed but could not be restored. Weekly automated restore drills convert that hypothesis into a continuously tested fact, and replaying to a random point exercises the WAL chain rather than just the base image. Cross-region monthly copies bound the blast radius of regional storage failure and credential compromise.
+
+===ADR===
+
+## ADR-105: Message Localisation with go-i18n and ICU Plurals
+**Decision:** All user-facing strings produced by Ledger services — statement labels, notification text, dashboard messages — are externalised into per-locale TOML message files managed with `nicksnyder/go-i18n`. Messages are identified by stable dotted keys (`statement.period_header`, `notification.account_closed`) and support CLDR plural categories; English source messages must declare plural forms wherever a count is interpolated, even though English uses only two. String concatenation to build sentences is prohibited because word order varies across languages; full-sentence messages with named placeholders are required. Source-language messages live next to the code that uses them and are extracted by `make i18n-extract` into the translation pipeline.
+
+**Rationale:** Externalised, key-addressed messages are the precondition for translation at all; embedded literals make each new locale a code change. CLDR plural categories exist because languages disagree fundamentally about counting — Polish and Arabic have categories English lacks — and retrofitting plural support after launch is far costlier than declaring it from the start. The concatenation ban prevents the grammatically broken output that template-stitched sentences produce in inflected languages.
+
+===ADR===
+
+## ADR-106: Translation File Workflow
+**Decision:** Locale message files live under `i18n/<locale>/messages.toml` in the repository and are the deployable artifact — no runtime fetch from a translation service. The English file is the source of truth; other locales are synchronised through the translation vendor's pipeline, which opens automated pull requests when translations complete. CI validates every locale file: parseable TOML, no unknown keys, no missing placeholders relative to the source message, and placeholder names matching exactly. Untranslated keys fall back to English at runtime and are counted by the `ledger_i18n_fallback_total` metric per locale, reviewed monthly. Machine translation may seed a new locale only when visibly flagged in staging and never ships to production without human review.
+
+**Rationale:** Committing translations makes every deployed string version-controlled and reviewable, and removes a runtime dependency whose outage would degrade rendering. Placeholder validation catches the classic translation defect — a renamed or dropped variable — at CI time instead of as a malformed customer statement. The fallback metric turns translation coverage from an assumption into a measured quantity per market.
+
+===ADR===
+
+## ADR-107: Locale Negotiation
+**Decision:** Ledger determines the response locale by a fixed precedence: (1) an explicit `locale` field stored on the account profile, (2) the request's `Accept-Language` header evaluated against the supported-locale list with RFC 4647 lookup matching, (3) the default `en-US`. The negotiated locale is resolved once in middleware, stored on the request context (within the ADR-077 allowlist), and used consistently for messages, date formatting, and currency display names — mixed-locale responses are prohibited. The supported-locale list is configuration shipped with the binary, and the negotiated locale is echoed in the `Content-Language` response header. Number and date formatting always derives from the negotiated locale, never from server defaults.
+
+**Rationale:** A stored preference outranking header negotiation reflects that an account holder's deliberate choice is better signal than a browser default, while header fallback gives sensible behaviour for unauthenticated and first-contact requests. Resolving once in middleware prevents the subtle bug where different layers negotiate independently and a single response mixes languages. Echoing `Content-Language` makes the decision observable to clients and caches.
+
+===ADR===
+
+## ADR-108: UTC Storage with Locale-Aware Presentation
+**Decision:** All timestamps in Ledger are stored as `timestamptz` in UTC and transmitted between services as RFC3339 UTC strings; conversion to local time happens exactly once, at the presentation edge (dashboard rendering, statement generation, notification text), using the account's IANA time zone identifier stored on the profile. Date-only business concepts — statement period boundaries, effective dates — are stored as `date` with an accompanying time zone identifier where the boundary is zone-dependent, never as midnight timestamps. Server and container time zones are pinned to UTC, and tests run under `TZ=UTC` plus one non-UTC zone (`Pacific/Auckland`) in the nightly suite to catch zone-dependent defects.
+
+**Rationale:** A single canonical zone for storage and transport eliminates the ambiguity arithmetic that produces off-by-one-day defects around DST transitions, while presentation-edge conversion gives users times in their own terms. Midnight-timestamp encoding of dates is the classic source of statements that shift a day across zones. Nightly tests under an offset zone with DST catch the bugs UTC-only test environments structurally cannot see.
+
+===ADR===
+
+## ADR-109: WCAG 2.1 AA as the Accessibility Baseline
+**Decision:** The Ledger merchant dashboard targets WCAG 2.1 Level AA conformance as a release requirement, not an aspiration. Concretely: all interactive elements are reachable and operable by keyboard; colour contrast meets the 4.5:1 text ratio (3:1 for large text and UI components); information is never conveyed by colour alone — status indicators pair colour with an icon or text; all images and icons carry appropriate alternative text or are marked decorative; form inputs have programmatically associated labels and error messages referenced via `aria-describedby`. New features ship with an accessibility section in their PR description. Conformance is audited annually by an external assessor, with findings tracked to closure in the issue tracker.
+
+**Rationale:** A financial dashboard is a tool people are obligated to use for their livelihood, which raises the bar from nice-to-have to professional necessity, and several target markets carry statutory accessibility requirements for financial services. Naming the concrete criteria in the ADR makes "accessible" a checkable property rather than a sentiment. External annual audits catch the drift that self-assessment reliably misses.
+
+===ADR===
+
+## ADR-110: Automated Accessibility Checks in CI
+**Decision:** The dashboard's CI pipeline runs `axe-core` against every Storybook story and against the Playwright end-to-end suite's key screens, failing the build on any violation at the `serious` or `critical` impact levels. Rule exceptions are declared per component with a linked issue and an expiry date; expired exceptions fail the build. In addition to axe, the pipeline enforces `eslint-plugin-jsx-a11y` at error severity in the lint stage. Automated checking is explicitly understood to cover roughly a third of WCAG criteria; the PR template's accessibility section requires a manual keyboard-only pass and a screen-reader spot check for flows that change interaction structure.
+
+**Rationale:** Automated checks catch the mechanical majority of regressions — missing labels, contrast failures, broken ARIA references — at the cheapest possible moment and prevent the slow erosion that follows an annual-audit-only model. Expiring exceptions convert "temporarily acceptable" from a permanent state into a tracked debt. Stating the automation coverage ceiling in the decision guards against the false confidence that a green a11y job otherwise breeds.
+
+===ADR===
+
+## ADR-111: Keyboard Navigation and Focus Management Standards
+**Decision:** The dashboard implements a documented focus management standard: focus order follows the visual reading order; route changes move focus to the new view's `h1`; modals trap focus while open and return it to the triggering element on close; destructive-action dialogs place initial focus on the non-destructive option; skip-to-content is the first focusable element on every page. All custom interactive components implement the WAI-ARIA Authoring Practices keyboard pattern for their role (combobox, menu, dialog, tabs), and custom components may not be built where a native element provides the semantics. Focus outlines are never removed without a visible replacement meeting contrast requirements. These rules live in the component library's contribution guide and are verified in component Playwright tests.
+
+**Rationale:** Focus behaviour is where single-page applications most consistently fail keyboard and screen-reader users, because the browser's native page-load focus semantics disappear and nothing replaces them by default. Codifying the patterns once in the component library means product teams inherit correct behaviour instead of re-deriving it. Preferring native elements eliminates whole categories of ARIA misuse at the source.
+
+===ADR===
+
+## ADR-112: Merchant Dashboard on React and TypeScript
+**Decision:** The Ledger merchant dashboard is a single-page application built with React 18 and TypeScript in `strict` mode, living in the `dashboard/` directory of the service repository. TypeScript strictness is non-negotiable: `any` requires an inline justification comment and is lint-counted with a downward-only budget enforced in CI. API types are generated from the OpenAPI document (ADR-073) via `openapi-typescript`; hand-written types for API payloads are prohibited, mirroring the backend rule. Routing uses React Router; component state stays local by default, with shared client state in Zustand stores introduced only when prop drilling exceeds two levels. Class components are prohibited in new code.
+
+**Rationale:** React with strict TypeScript is the stack the team already operates fluently, and generated API types extend the spec-as-truth discipline across the network boundary — a backend field rename becomes a compile error in the dashboard, not a runtime surprise. The downward-only `any` budget acknowledges legacy code while making the strictness gradient one-directional. Defaulting state local keeps the data-flow graph traceable as the application grows.
+
+===ADR===
+
+## ADR-113: Shared Component Library with Theme Variables
+**Decision:** Dashboard UI is composed from an internal component library (`dashboard/ui/`) wrapping Radix UI primitives with the Ledger visual language. All colour, spacing, typography, and radius values are defined once as CSS custom properties in a theme layer (`theme.css`); component styles reference theme variables exclusively, and hard-coded colour or pixel values in component CSS are lint-rejected. The library is developed in Storybook, with every component documenting its props, keyboard behaviour (ADR-111), and theming hooks. Product features import from the library only; importing Radix primitives directly in feature code is blocked by an ESLint boundary rule. Visual regression snapshots run per component in CI via Playwright screenshots.
+
+**Rationale:** A single wrapped component layer is where accessibility patterns, theming, and visual consistency are enforced once instead of per-feature; direct primitive imports would route around all three. Centralised theme variables make rebrand-scale visual changes a single-file edit and keep dark-mode support a theme-layer concern. Visual regression testing catches the styling breakage that unit tests are blind to.
+
+===ADR===
+
+## ADR-114: Frontend Build with Vite
+**Decision:** The dashboard builds with Vite, using esbuild for development transforms and Rollup for production bundles. Build output is content-hashed, immutable, and served from the CDN with `Cache-Control: public, max-age=31536000, immutable`; `index.html` alone is short-lived (60 seconds) so deployments propagate promptly. Code splitting follows routes, with vendor chunks separated so dependency updates do not invalidate application chunks. Bundle size is budgeted: the initial route's compressed JavaScript must stay under 250 KB, enforced by a CI size check that fails on regression beyond 5%. Source maps are generated for production but uploaded only to the error-tracking service, never served publicly.
+
+**Rationale:** Vite's development server starts in under a second on this codebase versus the previous webpack setup's forty, which compounds across every developer day. Content-hashed immutable assets plus a short-lived HTML shell is the standard resolution of the caching-versus-freshness tension for SPAs. The enforced size budget converts bundle growth from an invisible accumulation into a visible, reviewable decision at the moment it happens.
+
+===ADR===
+
+## ADR-115: Dashboard Styling with Tailwind on the Theme Layer
+**Decision:** Feature-level styling in the dashboard uses Tailwind CSS, configured so that every utility resolves to the theme variables defined in ADR-113 — the Tailwind palette, spacing scale, and typography scale are generated from `theme.css`, and arbitrary values (`mt-[13px]`, `text-[#336699]`) are disallowed by the official plugin's strictest setting plus lint rules. Component-internal styling in the UI library may use plain CSS modules where utility composition becomes unreadable, at the author's judgement. Global stylesheets are limited to the theme layer, a reset, and print styles for statements. Stylelint and the Tailwind class-order plugin run in CI.
+
+**Rationale:** Utility classes co-locate styling with markup and eliminate the dead-CSS accumulation that plagued the previous SCSS codebase, where deletion was never safe. Binding utilities to the theme scale closes the loophole that would otherwise let arbitrary values reintroduce visual drift one pixel at a time. Allowing CSS modules inside the component library acknowledges that some primitives are genuinely clearer as stylesheets than as fifteen-utility class strings.
+
+===ADR===
+
+## ADR-116: Architecture Decision Records Process
+**Decision:** Ledger records architecturally significant decisions as ADRs in `docs/adr/`, numbered sequentially, using the format this document follows: a Decision section stating what was decided concretely, and a Rationale section stating why. ADRs are immutable once accepted; changing course requires a new ADR that explicitly supersedes the old one, with both cross-linked. A decision qualifies as ADR-worthy when it constrains future work across more than one component or would surprise a competent newcomer. ADRs are proposed as pull requests and accepted by the same review process as code, with the area's CODEOWNERS as required reviewers. Draft status is permitted for at most 30 days before the PR is merged or closed.
+
+**Rationale:** The recurring cost in long-lived systems is re-litigating settled questions because the reasoning behind the status quo evaporated with the people who held it; ADRs are the cheapest known countermeasure. Immutability-plus-supersession preserves the decision history rather than overwriting it, which is exactly what makes the trail trustworthy. Routing ADRs through ordinary review keeps them socialised, not decreed.
+
+===ADR===
+
+## ADR-117: Package-Level Documentation Convention
+**Decision:** Every package under `internal/` carries a package comment in a dedicated `doc.go` answering three questions in order: what the package is responsible for, what it deliberately does not do, and which packages it may depend on. Exported identifiers require doc comments per standard Go convention, enforced by the lint gate. Long-form explanations live as Go doc comments or as `README.md` files inside the package directory they describe — a centralised `docs/architecture/` tree duplicating package internals is prohibited, with `docs/` reserved for cross-cutting material (ADRs, runbooks, onboarding). Diagrams are committed as Mermaid source next to the package they depict so they version with the code they describe.
+
+**Rationale:** Documentation co-located with code is documentation that gets updated in the same pull request that invalidates it; centralised trees describing internals drift within months and then actively mislead. The mandated "does not do" sentence is the highest-value line in a package comment, because scope creep enters through ambiguity about boundaries. Mermaid-as-source keeps diagrams diffable and reviewable instead of binary attachments nobody regenerates.
+
+===ADR===
+
+## ADR-118: Runbook Format and Location
+**Decision:** Operational runbooks for Ledger live in `docs/runbooks/`, one file per alert or operational procedure, named to match the alert that references them (ADR-062). Every runbook follows a fixed template: Symptom (what the responder sees), Impact (who is affected and how badly), Verification (how to confirm the condition is real), Mitigation (ordered steps to reduce impact now), Diagnosis (how to find the cause), and Escalation (who to involve and when). Runbooks are written for a responder unfamiliar with the subsystem, with exact commands and dashboard links rather than prose descriptions. Each runbook records its last-verified date; runbooks unverified for six months are flagged by a scheduled job, and the on-call rotation verifies one flagged runbook per shift as a standing duty.
+
+**Rationale:** Runbooks are read under the worst possible conditions — at night, under pressure, by whoever is on call rather than whoever knows most — so the template front-loads mitigation before diagnosis and assumes no context. Pairing each alert with a runbook by name removes a lookup step from every incident. The verification rota counters the universal decay of operational documentation by making freshness someone's explicit, small, recurring job.
+
+===ADR===
+
+## ADR-119: On-Call Rotation Structure
+**Decision:** Ledger is covered by a single weekly on-call rotation of at least six engineers, with a primary and a shadow; the shadow receives all pages read-only and is next week's primary. Engineers join the rotation after completing the onboarding checklist (runbook walkthrough, two shadow weeks, one supervised incident drill) — rotation membership is a qualification, not a default. Handoff happens at a fixed weekly meeting where the outgoing primary reviews open issues, paged incidents, and any alert that fired more than twice. Out-of-hours pages are compensated per the engineering handbook policy. The rotation owns alert hygiene: any alert that pages and requires no action must be tuned or downgraded within the same week, tracked as a standing metric.
+
+**Rationale:** Shadow-then-primary sequencing turns each rotation cycle into structured training rather than trial by fire, and the qualification gate protects both the service and the engineer. A fixed handoff ritual prevents the context loss that otherwise makes each week's incidents look novel. Assigning alert hygiene to the rotation aligns the incentive perfectly: the people woken by noise own the dial that reduces it.
+
+===ADR===
+
+## ADR-120: Incident Severity Levels and Roles
+**Decision:** Incidents affecting Ledger are classified at declaration into three severities: SEV1 (user-visible outage or data integrity risk — all hands, executive notification, public status page), SEV2 (degradation with workaround or limited blast radius — incident channel and commander, business-hours stakeholder updates), SEV3 (no current user impact but intervention required — tracked issue, no ceremony). Any engineer may declare an incident; over-declaration is explicitly preferred to hesitation, and severities may be revised freely as understanding improves. Every SEV1/SEV2 has exactly one incident commander who coordinates and communicates but does not debug, a designated communications owner for stakeholder updates, and a scribe maintaining the timeline in the incident channel. Production changes during a SEV1 bypass the merge queue via the documented break-glass procedure, which requires commander approval and retroactive review.
+
+**Rationale:** Pre-agreed severity definitions remove the costliest debate from the worst moment — deciding how seriously to take things while things burn. Separating command from keyboard prevents the universal failure where the most knowledgeable responder vanishes into a terminal and coordination stops. Encouraging over-declaration makes the rare big one get caught early.
+
+===ADR===
+
+## ADR-121: Blameless Postmortems with Tracked Actions
+**Decision:** Every SEV1 and SEV2 incident receives a written postmortem within five business days, using the template in `docs/postmortems/`: timeline, impact quantification, contributing causes (plural, by design — the template has no "root cause" field), what went well, and corrective actions. Postmortems are blameless as a hard rule: they name systems, gaps, and conditions, never individual fault, and asking "why did the person do that?" is reframed as "why did that action make sense at the time?". Corrective actions are filed as tracked issues with owners and due dates at review time; actions open past their due date appear in the weekly operations review until closed. Postmortems are published in the engineering-wide channel and discussed in a 30-minute review meeting open to all.
+
+**Rationale:** Blamelessness is what makes accurate timelines obtainable — people who fear consequences sanitise their accounts, and a sanitised postmortem optimises against learning. Multiple contributing causes reflect how complex-system failures actually occur; single-root-cause framing systematically truncates the investigation at the first plausible stopping point. Action tracking with visible ageing is the difference between a postmortem culture and a postmortem theatre.
+
+===ADR===
+
+## ADR-122: Vendor Evaluation Rubric
+**Decision:** Selecting any external vendor whose product sits in Ledger's critical path (infrastructure, observability, communications, data processing) follows a written evaluation against a standard rubric, recorded in `docs/vendor-evaluations/`. The rubric scores: functional fit against written requirements; security posture (SOC 2 Type II or equivalent, data-processing terms compatible with our obligations); operational maturity (status-page history, documented SLAs, support responsiveness during the trial); pricing across a three-year projection at 5× current scale; exit cost (data export formats, contractual lock-in, migration effort estimate); and a hands-on trial with production-shaped workloads. At least two vendors are evaluated for any new category, and the losing evaluation is retained alongside the winner's.
+
+**Rationale:** Vendor decisions made by demo impression accrete into an unexaminable architecture; written rubric scoring makes the trade-offs explicit and the decision auditable when circumstances change. Scoring exit cost at selection time counters the systematic bias toward entry convenience. Keeping the losing evaluation cheaply answers the inevitable later question of whether the alternative was considered and why it lost.
+
+===ADR===
+
+## ADR-123: Prefer Managed Services for Stateful Infrastructure
+**Decision:** Ledger runs stateful infrastructure on managed services by default: Amazon RDS for PostgreSQL, Amazon MSK for Kafka, and ElastiCache for Redis, rather than self-operating these systems on Kubernetes. Self-hosting a stateful system requires a written case demonstrating that managed offerings fail a hard requirement — not merely cost more — approved by the platform lead and revisited annually. Stateless workloads, by contrast, run on the shared Kubernetes clusters the platform team operates. The boundary is explicit: the team's operational investment goes into the ledger domain, not into becoming a database operations team. Managed-service configuration is nonetheless fully owned in Terraform — defaults are never accepted unexamined.
+
+**Rationale:** The hard parts of stateful systems — failover correctness, durable backups, version upgrades under load — are exactly where managed providers concentrate specialist expertise that a payments team cannot match part-time, and the failure cost of getting them wrong lands on financial data. Self-hosting decisions made on sticker-price comparisons systematically omit the staffing cost that dominates the true total. The written-case requirement keeps the default strong while leaving a legitimate exit.
+
+===ADR===
+
+## ADR-124: Single Cloud Provider Commitment
+**Decision:** Ledger commits to AWS as its sole cloud provider; multi-cloud deployment is explicitly out of scope. Cloud-portability abstractions — wrapper layers over object storage, queueing, or managed databases whose purpose is provider neutrality — are prohibited as speculative; services use AWS APIs and managed offerings directly via Terraform-provisioned resources. Portability concerns are addressed at the standards level instead: PostgreSQL wire protocol, Kafka protocol, S3 API, and OpenTelemetry are favoured over provider-proprietary equivalents (DynamoDB, Kinesis, X-Ray) when capabilities are comparable, with deviations argued case by case. This commitment is revisited only on a genuine trigger event: an acquisition, a regulatory data-residency mandate AWS cannot meet, or a sustained commercial failure of the relationship.
+
+**Rationale:** Multi-cloud readiness purchased in advance costs real engineering daily — lowest-common-denominator abstractions, doubled operational surface, weaker use of provider strengths — against a migration scenario that rarely materialises and would dwarf the abstraction layer anyway if it did. Preferring protocol standards over proprietary services captures most realistic portability at near-zero cost. Naming the revisit triggers keeps the commitment a decision rather than an ideology.

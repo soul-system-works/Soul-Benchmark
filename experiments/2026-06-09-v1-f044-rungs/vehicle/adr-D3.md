@@ -1,0 +1,5 @@
+## ADR-014: Monetary Amounts Are int64 Cents End-to-End
+
+**Decision:** Every monetary amount in Ledger is represented as `int64` cents (minor units) at every layer — API payloads, database columns, internal structs, logs, and display formatting. Floating-point types MUST NOT touch money anywhere, including "harmless" display paths: human-readable output is produced by integer division and remainder (`amountCents/100`, `amountCents%100`), never by `float64(amountCents)/100`. Currency conversion multiplies scaled integers and rounds once, explicitly, at a documented boundary.
+
+**Rationale:** A reconciliation report once drifted by $0.01 on 0.3% of rows because a display helper converted through float64 and a downstream consumer parsed the rendered string back into the pipeline. The drift was invisible in tests (it required specific amounts) and cost three days of audit. Integer cents make representable-value errors structurally impossible rather than statistically rare; the rendering discipline exists because the incident entered through the display path, not the arithmetic path.
