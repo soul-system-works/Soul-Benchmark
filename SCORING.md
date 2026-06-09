@@ -90,6 +90,6 @@ line; reconstructed ones have a `**Reconstructed from:**` line instead. Never bo
 
 ---
 
-**Source:** Soul System study method (`../docs/study/00-method.md`); read-the-recommendation
+**Source:** Soul System study method ([Soul System](https://github.com/soul-system-works/Soul-System) repo, `docs/study/00-method.md`); read-the-recommendation
 lesson SOUL-133/134; pre-registration discipline applied across the 2026-06-05 probes.
 **Status:** active.

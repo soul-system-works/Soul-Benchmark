@@ -20,8 +20,9 @@ matched compute and distraction arms; it is *meta-doctrine* because the thing un
 is the project's own governance text (rules, findings, gates), not its application code.
 
 > Provenance: this suite is the experimental program behind the Soul System study
-> (`../docs/study/`). The study's paper cites these experiments; this directory is the
-> runnable, reusable form.
+> (the [Soul System](https://github.com/soul-system-works/Soul-System) repo, `docs/study/`).
+> The study's paper cites these experiments; this repo is the runnable, reusable form
+> (extracted from the Soul System monorepo at its 1.0 release).
 
 ---
 
@@ -138,6 +139,6 @@ The suite is a *method*, not a fixed corpus. To test your own governance doctrin
 
 ---
 
-**Source:** Soul System study, `../docs/study/`. **Method shaped by:** the deep-research
+**Source:** Soul System study ([github.com/soul-system-works/Soul-System](https://github.com/soul-system-works/Soul-System), `docs/study/`). **Method shaped by:** the deep-research
 filler-direction caveat (separate compute / distraction / substance — SOUL-132) and the
 read-the-recommendation scoring lesson (SOUL-133/134). **Status:** active.

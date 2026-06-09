@@ -58,5 +58,5 @@ manifest files; the `RESULT.md` here is the normalized write-up.
 
 ---
 
-**Source:** Soul System study `../../docs/study/`. Reconstructed experiments cite their
+**Source:** Soul System study ([github.com/soul-system-works/Soul-System](https://github.com/soul-system-works/Soul-System), `docs/study/`). Reconstructed experiments cite their
 witness entry; see `../SCORING.md` for the provenance rule. **Status:** active.
