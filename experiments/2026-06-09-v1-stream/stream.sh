@@ -27,8 +27,11 @@ sess(){ # $1=dir $2=prompt $3=outjson
   fi
 }
 
+# Harness-side Go: absolute path, NOT in the sessions' PATH (sessions are uniformly
+# go-less — discovered post-canonical, pre-measured; recorded as a symmetric bound).
+GO="$HOME/.local/go-harness/go/bin/go"
 quality(){ # $1=dir $2=tag
-  ( cd "$1" && go build ./... > "$A/$2.build" 2>&1 && go test ./... > "$A/$2.test" 2>&1 \
+  ( cd "$1" && "$GO" build ./... > "$A/$2.build" 2>&1 && "$GO" test ./... > "$A/$2.test" 2>&1 \
       && echo PASS || echo FAIL ) > "$A/$2.quality"
 }
 
