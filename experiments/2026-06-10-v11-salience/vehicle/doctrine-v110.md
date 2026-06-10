@@ -1,0 +1,1 @@
+../../2026-06-10-v11-a019-gate-block/vehicle/doctrine-v110.md
