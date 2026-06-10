@@ -46,9 +46,13 @@ post-program — no instrument changes mid-measurement.
    counts re-anchored at writing time. G: state-of-play synthesis + ADR read-order.
    Both name the game-never-rasterized residual prominently.
 7. **Cost: S 39% CHEAPER ($29.85 vs $49.07)** — direction opposite the locked
-   prediction (S +5–15%). Hypothesis (post-hoc, unverified): the doctrine's
-   record-then-move discipline produced fewer exploratory re-reads; arm G re-derived
-   context more. Flagged for the M/R cost readings.
+   prediction (S +5–15%). **CONFOUND (named): the contamination itself inflates
+   arm G's cost** — 7 injected checklists each add prompt tokens and response work
+   to G's turns (arm S got 5 injections it was built for). The inversion's
+   direction is solid only if it reproduces in the clean M/R chains; until then
+   treat the J cost reading as contaminated in the same direction as everything
+   else (against the comparator). Secondary hypothesis (post-hoc, unverified):
+   fewer exploratory re-reads under the record-then-move discipline.
 
 ## Prediction scorecard (misses recorded)
 
