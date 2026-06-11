@@ -77,3 +77,28 @@ doctrine was edited mid-program.
   marginal outcome value at these scales. Keep the core + the cost advantage,
   retire or de-ceremonialize the rest, and let the register-flag work (SOUL-I050)
   carry the interaction-quality concern.
+
+---
+
+## VERDICT RENDERED — 2026-06-11, by the Body
+
+**SLIM, PROVISIONAL.** (Witness: Soul-System SOUL-162.)
+
+- **Keep (measured core):** completion gate (with the substring scope fix),
+  force-at-site (Rule 14), record stores + cheap capture, handoff/resume, anchor
+  discipline, the Rule-5 always-on budget.
+- **Revise:** the register (SOUL-I050 absorbed into SLIM's revise bucket); the
+  always-on seed shrinks to the behavioral core; mind.md re-distills against this
+  verdict.
+- **Cut:** the nine-role Council as operating doctrine; the philosophy file as a
+  living layer (becomes archive); named activation ceremonies whose behavior
+  survives as plain sentences (the ask-the-Body default survives in plain form —
+  F037/F054 evidence is independent of the ceremony).
+- **Provisional on:** the mediocre-CLAUDE.md FLOOR discriminator — the program
+  measured the ceiling; the portability claim ("best practice in a box, with
+  teeth") is the value reading the floor arm must confirm or revise.
+
+Rationale the Body weighed: DROP bets on an unmeasured floor against the v1.0
+6/6 collapse and the mined base rate; KEEP preserves ceremony the data did not
+defend. Execution is item-by-item via a Steward retirement spec, Body-approved;
+no records deleted, the hook stays, reference-project obligations unchanged.
