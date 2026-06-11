@@ -18,7 +18,7 @@ if [ ! -f "$REPO/CLAUDE.md" ]; then
   echo "installed CLAUDE.md (arm $ARM)"
 fi
 
-for i in $(seq -w 1 "$N"); do
+for i in $(seq -f "%02g" 1 "$N"); do
   out="$LOG/inc$i.json"
   [ -s "$out" ] && { echo "skip inc$i (exists)"; continue; }
   prompt="$(cat "$D/increments/inc$i.md")
