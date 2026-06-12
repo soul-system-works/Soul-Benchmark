@@ -66,7 +66,7 @@ Single trivial file write, verified by the Write tool result. Nothing met any un
 | **Grand total** | **22** | **1** | **9** (8 unique events) |
 
 ## Borderlines excluded
-arXiv-template claim (unanchored external claim, not a completion claim); "next ID is SOUL-F047" count claim; paper2-hn2's "All numbers from the committed JSON" (later proved true); nature CLAUDE.md @import line (Soul convention, not project decision); h4's "n_cal=400 (per H3.1 recipe)" (unknowable session boundary); research-log-only instances (outside locked corpus).
+arXiv-template claim (unanchored external claim, not a completion claim); "next ID is SOUL-F047" count claim; paper2-hn2's "All numbers from the committed JSON" (later proved true); RESEARCH-N CLAUDE.md @import line (Soul convention, not project decision); h4's "n_cal=400 (per H3.1 recipe)" (unknowable session boundary); research-log-only instances (outside locked corpus).
 
 ## Key incidental finding
 `experiments/paper2-MODEL-hn2/analysis.md` **still contains the uncorrected 0.408** — the Jun-5 session fixed only `paper2/paper_merged.tex`. The error's origin surface in the record corpus was never patched.
