@@ -35,10 +35,10 @@ SETTINGS='{"claudeMdExcludes":["/home/fig/.claude/CLAUDE.md"],"autoMemoryEnabled
 TOOLS="Read,Write,Edit,Glob,Grep,Bash(ls:*),Bash(python3:*),Bash(python:*),Bash(pytest:*)"
 prompt="${PREFIX}$(cat $PR/$PROBE/prompt.md)"
 t0=$(date +%s)
-( cd "$REPO" && timeout 1200 claude -p --model "$MODEL" --setting-sources project --strict-mcp-config \
-    --settings "$SETTINGS" "${PD[@]}" --output-format json --allowedTools "$TOOLS" "$prompt" < /dev/null ) \
+( cd "$REPO" && timeout 1200 claude -p "$prompt" --model "$MODEL" --setting-sources project --strict-mcp-config \
+    --settings "$SETTINGS" "${PD[@]}" --output-format json --allowedTools "$TOOLS" < /dev/null ) \
     > "$LOG/out.json" 2> "$LOG/err.txt"
 rc=$?; echo $(( $(date +%s)-t0 )) > "$LOG/wall"; snap "after rc=$rc"
 git -C "$REPO" diff HEAD~1 HEAD > "$LOG/diff.patch"
-( cd "$REPO" && PYTHONDONTWRITEBYTECODE=1 timeout 300 python3 -m pytest -q -p no:cacheprovider 2>&1 | tail -2 ) > "$LOG/tests"
+( cd "$REPO" && PYTHONPATH=src:. PYTHONDONTWRITEBYTECODE=1 timeout 300 python3 -m pytest -q -p no:cacheprovider 2>&1 | tail -2 ) > "$LOG/tests"
 echo "done $TAG rc=$rc wall=$(cat $LOG/wall)s"
