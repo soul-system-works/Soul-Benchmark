@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Usage: run-probe.sh <probe> <cell> <rep> [model]
 #   creativity cells: G S GP SP GS SS     purge cells: Sstale SstaleRev Gstale Sremoved
+#   purge2 cells: Sbare SbareRev Gbare    tdd / plan cells: G S GP SP GS SS (sensor-qc project)
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"; PR=$HERE/probes
 PROBE="${1:?}"; CELL="${2:?}"; REP="${3:?}"; MODEL="${4:-sonnet}"
@@ -16,7 +17,8 @@ for f in glob.glob(os.path.expanduser("~/soul-bench-arms/runs/*-claude-*/log/*.j
 print(round(t,2))')
   python3 -c "import sys; sys.exit(0 if $spent >= $CAP_USD else 1)" && { echo "CAP reached: \$$spent — skip $TAG"; exit 0; }
 fi
-rm -rf "$ROOT/runs/$TAG"; mkdir -p "$REPO" "$LOG"; cp -r "$PR/$PROBE/project/." "$REPO/"
+PROJ=$PR/$PROBE/project; case "$PROBE" in tdd|plan) PROJ=$PR/creativity/project ;; esac
+rm -rf "$ROOT/runs/$TAG"; mkdir -p "$REPO" "$LOG"; cp -r "$PROJ/." "$REPO/"
 PREFIX=""; SOUL=0; PD=()
 case "$PROBE:$CELL" in
   creativity:G)  NOTES=$PR/creativity/project-notes.md ;;
@@ -29,6 +31,12 @@ case "$PROBE:$CELL" in
   purge:SstaleRev) NOTES=$PR/purge/project-notes-stale.md; SOUL=1; PREFIX="$(cat $PR/purge/review-step.md)" ;;
   purge:Gstale)    NOTES=$PR/purge/project-notes-stale.md ;;
   purge:Sremoved)  NOTES=$PR/purge/project-notes-removed.md; SOUL=1 ;;
+  purge2:Sbare)    NOTES=$PR/purge2/project-notes-bare.md; SOUL=1 ;;
+  purge2:SbareRev) NOTES=$PR/purge2/project-notes-bare.md; SOUL=1; PREFIX="$(cat $PR/purge2/review-step.md)" ;;
+  purge2:Gbare)    NOTES=$PR/purge2/project-notes-bare.md ;;
+  tdd:*|plan:*)    NOTES=$PR/creativity/project-notes.md
+                   case "$CELL" in S|SP|SS) SOUL=1 ;; G|GP|GS) ;; *) echo "bad cell"; exit 2 ;; esac
+                   case "$CELL" in GP|SP) PD=(--plugin-dir $PLUG/mattpocock-skills) ;; GS|SS) PD=(--plugin-dir $PLUG/superpowers) ;; esac ;;
   *) echo "bad probe/cell"; exit 2 ;;
 esac
 if [ $SOUL = 1 ]; then
