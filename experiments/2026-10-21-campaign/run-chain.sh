@@ -70,7 +70,7 @@ for i in $(seq -f "%02g" "$FIRST" "$LAST"); do
   if [ -n "${CAP_USD:-}" ] && [ "$PROV" = claude ]; then
     spent=$(python3 -c 'import json,glob,os,sys
 t=0
-for f in glob.glob(os.path.expanduser("~/soul-bench-arms/runs/*-claude-*/log/*.json")):
+for f in glob.glob(os.path.expanduser("~/soul-bench-arms/runs/*-claude-*/log/*.json"))+glob.glob(os.path.expanduser("~/soul-bench-arms/runs/probe-*/log/out.json")):
     try: t+=json.load(open(f)).get("total_cost_usd") or 0
     except Exception: pass
 print(round(t,2))')

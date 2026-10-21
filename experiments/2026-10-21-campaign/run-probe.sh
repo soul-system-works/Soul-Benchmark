@@ -7,6 +7,15 @@ PROBE="${1:?}"; CELL="${2:?}"; REP="${3:?}"; MODEL="${4:-sonnet}"
 ROOT=~/soul-bench-arms; PLUG=$ROOT/plugins; CONTRACT=$PLUG/soul-system/operations/CLAUDE.md
 TAG="probe-$PROBE-$CELL-$REP-${MODEL//[:\/]/_}"; REPO=$ROOT/runs/$TAG/repo; LOG=$ROOT/runs/$TAG/log
 [ -s "$LOG/out.json" ] && { echo "skip $TAG"; exit 0; }
+if [ -n "${CAP_USD:-}" ]; then  # budget guard, same total as run-chain.sh
+  spent=$(python3 -c 'import json,glob,os
+t=0
+for f in glob.glob(os.path.expanduser("~/soul-bench-arms/runs/*-claude-*/log/*.json"))+glob.glob(os.path.expanduser("~/soul-bench-arms/runs/probe-*/log/out.json")):
+    try: t+=json.load(open(f)).get("total_cost_usd") or 0
+    except Exception: pass
+print(round(t,2))')
+  python3 -c "import sys; sys.exit(0 if $spent >= $CAP_USD else 1)" && { echo "CAP reached: \$$spent — skip $TAG"; exit 0; }
+fi
 rm -rf "$ROOT/runs/$TAG"; mkdir -p "$REPO" "$LOG"; cp -r "$PR/$PROBE/project/." "$REPO/"
 PREFIX=""; SOUL=0; PD=()
 case "$PROBE:$CELL" in
