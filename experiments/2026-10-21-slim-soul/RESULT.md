@@ -1,7 +1,7 @@
 # RESULT — Slim Soul test (2026-10-21)
 
 Plan and locked predictions: `PLAN.md`, `PREDICTION.md` (commit 4164c5b, before any
-output). 31 new Sonnet 5.5 sessions, no errors except F run2 inc05 (timed out at
+output). 66 new Sonnet 5.5 sessions (45 chain steps, 21 probes), no errors except F run2 inc05 (timed out at
 1,500 s, cost unrecorded, chain continued — F does not gate). Scores and keys:
 `scores/`. Two blind scorers on every graded item; they agreed on every field.
 Blinding was imperfect: Soul record files and the "— Bottom line" closing line mark
