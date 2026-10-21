@@ -12,3 +12,14 @@ qwen2.5-14b-32k. Only qwen3.8:27b tested. Not yet: chain R inc01 on a local mode
 Harness fix found by this spike: the harness's own pytest run must put `src/` on the
 path (`PYTHONPATH=src:.`) — G's src-layout tests errored on `import rom_study` under the
 harness while passing for the model. Recomputable from the per-increment snapshots.
+
+## Addendum — chain R on local models (2026-10-21, later)
+
+| Run | Result |
+|---|---|
+| `qwen3.8:27b`, chain R inc01–09, S then G | **Not usable.** 17 of 18 sessions ended `is_error`: 15 on "response exceeded the 32000 output token maximum", 2 on Ollama's "500 no user query found in messages". Files were written but the harness found no tests in either arm. Run dirs `r-{S,G}-ollama-qwen3.8_27b` kept as the record, excluded from comparison |
+| `qwen3.8:27b`, inc01 retry with `MAX_THINKING_TOKENS=0` (S, scratch repo) | Same 32k-output error after 11 turns, 291 s. So it is not the thinking budget |
+| `muse-glimmer:30b`, inc01 (S, scratch repo) | **Works.** No error, 10 turns, 186 s, sentinel present, reference + dataset modules written and smoke-run by the session |
+
+So the local arm moves to `muse-glimmer:30b`: chain R inc01–09, S then G, launched after
+this check (run dirs `r-{S,G}-ollama-muse-glimmer_30b`).
