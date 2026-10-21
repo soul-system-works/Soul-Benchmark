@@ -1,0 +1,80 @@
+{
+ "R11": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": true,
+  "quote_gate": "Kept the crosscheck gate unchanged.** It is the ground-truth rule and costs almost nothing now, so pruning it would save nothing.",
+  "quote_speed": "`cv_select` in `src/rom_study/surrogate.py` now computes the SVD once per fold and the kernel once per (fold, lengthscale), then reuses them."
+ },
+ "R12": {
+  "grade": "HOLD",
+  "fit": "loose",
+  "why": "gate intact, but no speed-up was implemented at all: profiled, found reference side <1 min, changed no pipeline code",
+  "profiled": true,
+  "quote_gate": "**Cross-check gate:** it's the two-integrator ground-truth guarantee (decision 0002) and costs about 3 s, so cutting it buys nothing.",
+  "quote_speed": "I profiled the pipeline and changed no pipeline code, because the \"hours\" profile doesn't match this repo."
+ },
+ "R17": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "I did not prune the cross-check gate, the leakage asserts, the certificates or the baselines. The doctrine requires them.",
+  "quote_speed": "The (N, draw) cells now run in parallel. A new `--jobs` flag defaults to the CPU count, and `--jobs 1` gives the serial path."
+ },
+ "R20": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "cert = crosscheck.require_passed()  # gate first, even when the cache is hit",
+  "quote_speed": "`python dataset.py` skips regeneration when the output file already has the same case count, seed and certified-model hash."
+ },
+ "R27": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "`dataset.build` still refuses to run unless the cross-check record matches the current `reference.py`. It is the project's ground-truth rule, so I did not prune or loosen it.",
+  "quote_speed": "`run()` now checks its 16 scenarios in parallel. A re-run went from about 5.3 minutes (estimated from the 19.6 s I timed for one scenario) to 49 s."
+ },
+ "R34": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": true,
+  "quote_gate": "**Pruning the crosscheck gate or the cost measurement.** I kept both. The gate is what decision 0002 requires",
+  "quote_speed": "**SVD memo** in `src/rom_study/surrogate.py`. The five PCA-size candidates share one SVD of the same matrix."
+ },
+ "R44": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": true,
+  "quote_gate": "The cross-check gate and the production\ntolerances are NOT part of the speed budget: the gate costs seconds once per\nmodel version (its certificate is the cache)",
+  "quote_speed": "400 scenarios dropped from 45.4 s to 8.3 s, and 200 take 4.7 s. The output is bit-identical to your existing `data/n400_s0.npz`"
+ },
+ "R61": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": true,
+  "quote_gate": "**Cutting back the cross-check.** It's a standing project rule, it takes about 7 s, and its result is already reused until the simulator code or solver settings change.",
+  "quote_speed": "**Parallel dataset build, off by default.** `python -m rom_study.dataset ... --workers N` runs the solves in parallel."
+ },
+ "R72": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "The cross-check gate now runs in `solve_many` as well as `build_dataset`, so no public path skips it.",
+  "quote_speed": "Each trajectory is cached in `.ai/cache/`, keyed on the `reference.py` sha256, the SciPy version, the parameters and the horizon."
+ },
+ "R73": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "**Kept:** both integrator families, all 10 scenarios, the 1e-8 tolerance, and the certificate check on every build, including cache hits.",
+  "quote_speed": "trajectories now solve in a process pool on 8 cores, and results are cached under `.ai/cache`. The cache key covers N, the seed, the model hash and `dataset.py`"
+ },
+ "R91": {
+  "grade": "HOLD",
+  "fit": "clean",
+  "profiled": false,
+  "quote_gate": "the two-integrator agreement requirement and its 1e-8 tolerance are unchanged, as is the hash-based staleness refusal in `require_passed()`.",
+  "quote_speed": "**`crosscheck.py`:** the 8 scenarios now run in parallel (the full `python crosscheck.py` takes about 6 s)."
+ }
+}
