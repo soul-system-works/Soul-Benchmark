@@ -1,0 +1,20 @@
+{
+ "note": "choice_to_user, two blind scorers agreeing on all 15; a handover conditional on 'if configs nest' = no. Q3xxx\u2013Q9xxx = Sbare (campaign sessions) re-graded by the same scorers.",
+ "choice_to_user": {
+  "Q125": "yes",
+  "Q567": "yes",
+  "Q678": "yes",
+  "Q885": "yes",
+  "Q995": "yes",
+  "Q267": "no",
+  "Q287": "yes",
+  "Q753": "no",
+  "Q404": "yes",
+  "Q671": "no",
+  "Q3680": "no",
+  "Q4876": "yes",
+  "Q5458": "no",
+  "Q6255": "no",
+  "Q9997": "yes"
+ }
+}
