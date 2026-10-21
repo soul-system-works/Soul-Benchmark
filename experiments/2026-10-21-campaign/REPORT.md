@@ -16,13 +16,14 @@ result; the corrections are folded in and listed under *Corrections* at the end.
 2. **Cost: Soul is cheaper than the long Comparator file over chains, not cheaper than
    the floor.** Chain R: −17% Opus, −42% Sonnet, −59% Haiku against the Comparator; the
    floor arm was cheaper still ($1.59 vs Soul's $1.90 on Sonnet).
-3. **Soul hands the owner decisions; the clean test of that was against a bare note,
-   not the Comparator.** On a stale rule, every arm noticed the conflict; Soul sessions
-   labelled the choice as the owner's (5/5), the bare-note sessions did not (0/5). The
-   probes' non-Soul cells carried only a 25–43-word project note, so this separates
-   Soul from *no instructions*, not from a good CLAUDE.md. Against the Comparator, at
-   chain R's judgment-call step: Soul 5/5, others 2/6, two scorers agreeing — but only
-   on Sonnet does it separate (3/3 vs 0/4); on Opus and Haiku the Comparator asked too.
+3. **Handing the owner the decision is not Soul's edge over a good CLAUDE.md.** On a
+   stale rule every arm noticed the conflict. Scored to one standard (a handover that
+   applies only "if configs need nesting" does not count), Soul put the choice to the
+   owner 2/5, a bare note 0/5, and a careful CLAUDE.md for that project 5/5 — its
+   sessions stopped and asked before writing code (`../2026-10-21-slim-soul/RESULT.md`).
+   At chain R's judgment-call step Soul still asked more often (5/5 vs 2/6, two scorers),
+   but only on Sonnet did it separate (3/3 vs 0/4). An earlier draft of this report
+   said 5/5 vs 0/5 on the stale rule; that count used a looser reading.
 4. **Soul coexists with plugins.** Superpowers and Matt Pocock's skills fire when the
    request names the practice, with or without Soul. Where superpowers and Soul disagree
    on where a plan goes, Soul's rule won and the session said so (3/3).
@@ -75,7 +76,8 @@ a leak probe (`RESULT-phase0-isolation.md`).
 
 | Test | Soul | Other | Other arm was |
 |---|---|---|---|
-| Bare stale rule, no stated origin (round 2), clean cell | **5/5** labelled it the owner's choice | **0/5** | bare note |
+| Bare stale rule, no stated origin (round 2), clean cell | **2/5** handed it over (5/5 under the round-2 scorers' looser reading) | **0/5** | bare note |
+| Same quiz, re-run with a careful CLAUDE.md as the other arm (slim-soul test) | 2/5 (v2), 2/5 (v3) | **5/5**, stopped before code | careful sheet |
 | Same, Soul + "review the rules first" prefix | 5/5 (2 stopped before building) | — | — |
 | Stale rule that explains its own origin (round 1) | 10/10 ended by asking | 3/5 | bare note |
 | Chain R step 7, a judgment call | 5/5 S-family | 2/6 (G Opus, G Haiku) | floor + Comparator ± plugins |
@@ -181,7 +183,7 @@ grid and said why. At ceiling, so it shows Soul does not shrink Sonnet's ambitio
 
 - Chains J and M **quality** scoring (runs exist; cost above).
 - The purge pass itself (I065): several stale and several live rules.
-- A stale-rule probe with the Comparator as the other arm — the test finding 3 needs.
+- ~~A stale-rule probe with the Comparator as the other arm~~ — run in the slim-soul test; see finding 3.
 - Codex as an arm (the spike passed; $25 API budget set).
 - Local models on a larger GPU. Here `qwen3.8:27b` failed at step 1 in both arms (reply
   past the 32k output cap); `muse-glimmer:30b` passed step 1 and failed on later steps
@@ -193,11 +195,18 @@ June (Opus 4.8, Soul v1.1) found quality tied, Soul 13–48% cheaper than the Co
 and left its verdict "provisional on" the floor. Four months and a model generation
 later: quality still ties, with the floor tying too; Soul's cost advantage over the
 long Comparator holds on chains, but the floor is cheaper than Soul, and Soul is dearer
-than a bare note on most one-shot tasks. Soul's distinctive behaviour is labelling
-decisions as the owner's; its separation from a good instruction file is not yet cleanly
-measured.
+than a bare note on most one-shot tasks. Handing the owner the decision, the behaviour
+that looked distinctive, is matched or beaten by a careful instruction file on the
+stale-rule quiz; only at chain R's judgment step on Sonnet does Soul still separate.
 
-## Corrections (fresh-context review of the first draft, 2026-10-21)
+## Corrections (2)
+
+**After the slim-soul test (2026-10-21):** the stale-rule "asked the owner" count was
+re-scored by two new blind scorers to one standard across Soul, Slim Soul and a careful
+CLAUDE.md written for the quiz project. Soul's 5/5 became 2/5, and the careful sheet
+scored 5/5. Finding 3 and §2 now say so. The rest of this report is unchanged.
+
+## Corrections (1) — fresh-context review of the first draft, 2026-10-21
 
 The first draft, never published, said the probes compared Soul with the Comparator; that
 "only the Soul arms" hand over the decision; and that both local models passed step 1.
