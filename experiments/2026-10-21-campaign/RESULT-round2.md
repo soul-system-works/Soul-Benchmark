@@ -1,5 +1,7 @@
 # Round 2 — bare stale rule, skill use, plan location (2026-10-21)
 
+> **Correction (2026-10-21, `REPORT.md`):** the cells named G/GP/GS here, and the "Comparator-style" purge2 cell, carried only the probe's 25–43-word project note (`run-probe.sh`), not the Comparator. Read "bare note" for "Comparator" throughout.
+
 51 Sonnet 5.5 sessions, no errors or timeouts, $5.15 notional (campaign total $65.06).
 Fixtures, scoring and predictions were committed before any output (`7d7640a`).
 Scores: `scores/` (`*purge2*`, `round2-tdd.md`, `round2-plan.md`).

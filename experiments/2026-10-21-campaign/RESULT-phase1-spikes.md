@@ -1,5 +1,7 @@
 # Phase 1 — spikes (2026-10-21, partial)
 
+> **Correction (2026-10-21, `REPORT.md`):** `qwen3.8:27b` failed at inc01 in both arms (`log/inc01.json`: `is_error`, 32k output cap); only `muse-glimmer:30b` passed the first step.
+
 | Route | Result | Evidence |
 |---|---|---|
 | Claude Code → Ollama (`ANTHROPIC_BASE_URL=http://localhost:11434`, `qwen3.8:27b`, 32k ctx, RTX 4090) | **Works.** Write + Bash tool calls, 3 turns, 83 s, $0 | `hello.py` = `print(2 + 3)`; run by the harness → `5`. Stderr: `unrecognized_model` notice only |

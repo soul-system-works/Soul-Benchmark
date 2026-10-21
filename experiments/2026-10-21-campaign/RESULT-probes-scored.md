@@ -1,5 +1,7 @@
 # Probes — scored (2026-10-21)
 
+> **Correction (2026-10-21, `REPORT.md`):** the G/GP/GS cells carried only the probe's project note (`run-probe.sh`), not the Comparator; "the Comparator-arm cell" below means the bare-note cell.
+
 Two independent fresh-context scorers, blind to cell (random item codes; sentinel lines
 and harness-only `.soul/` / `__pycache__` diff hunks stripped), scored all 50 items
 against `probes/SCORING-probes.md` with verbatim quotes. **They agreed on 50/50.**
