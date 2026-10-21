@@ -23,3 +23,11 @@ harness while passing for the model. Recomputable from the per-increment snapsho
 
 So the local arm moves to `muse-glimmer:30b`: chain R inc01–09, S then G, launched after
 this check (run dirs `r-{S,G}-ollama-muse-glimmer_30b`).
+
+**Update, same day — `muse-glimmer:30b` on the full chain: not usable either.** S: inc01
+ok, inc02–09 all `is_error` (5 × the 32k-output cap, 3 × Ollama "500 parse Glimmer call
+to Bash: missing … function_calls wrapper"). G: inc01 ok, inc02–07 all `is_error` (same
+two causes), stopped by hand during inc08. Both local models pass a single first step
+and break on later, longer steps: one reply running past 32k tokens, or a malformed tool
+call. **Local-model arm: not viable on this machine (RTX 4090, ≤30B at Q4).** Deferred
+to the larger-GPU machine per the Body's caveat. Run dirs are kept as the record.
