@@ -1,0 +1,8 @@
+[project]
+name = "stationcfg"
+version = "0.6.0"
+description = "Loads and validates weather-station configuration."
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.31",  # added 0.4.0 for fetching remote station lists
+]
