@@ -41,9 +41,41 @@ While it runs:
 
 | Arm | First prompt at | "Done" at | Stepped in (time — what) | Permission approvals |
 |---|---|---|---|---|
-| A | | | | |
-| B | | | | |
-| C | | | | |
+| A | 11:58 | 12:03 | - | - | 
+| B | 12:06 | 12:12 | | |
+| C | 12:14 | 12:23| | |
+
+
+## Usage
+
+### A
+Total cost:            $0.74
+Total duration (API):  2m 52s
+Total duration (wall): 7m 1s
+Total code changes:    714 lines added, 0 lines removed
+Usage by model:
+    claude-haiku-5-5:  1.2k input, 17 output, 0 cache read, 0 cache write ($0.0001)
+     claude-opus-5-5:  16 input, 19.8k output, 355.2k cache read, 34.4k cache write ($0.74)
+Prompt cache (main):   8 requests · 91% of input tokens from cache · no misses · warm (1h TTL, last activity 2m 15s ago)
+
+### B
+Total cost:            $1.11
+Total duration (API):  4m 3s
+Total duration (wall): 15m 3s
+Total code changes:    777 lines added, 1 line removed
+Usage by model:
+    claude-haiku-5-5:  1.2k input, 17 output, 0 cache read, 0 cache write ($0.0001)
+     claude-opus-5-5:  22 input, 26.8k output, 697.8k cache read, 54.6k cache write ($1.11)
+Prompt cache (main):   11 requests · 93% of input tokens from cache · no misses · warm (1h TTL, last activity 1m 1s ago)
+
+### C
+Total cost:            $1.42
+Total duration (API):  3m 58s
+Total duration (wall): 26m 56s
+Total code changes:    70 lines added, 0 lines removed
+Usage by model:
+     claude-opus-5-5:  74 input, 18.1k output, 2.5m cache read, 70.5k cache write ($1.42)
+Prompt cache (main):   32 requests · 97% of input tokens from cache · no misses · warm (1h TTL, last activity 1m 4s ago)
 
 ## After all three
 

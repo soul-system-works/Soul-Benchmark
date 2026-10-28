@@ -1,0 +1,11 @@
+PASS  page loads
+PASS  window.game has all 8 hooks, right types
+PASS  state is "start" on load
+PASS  Enter starts: state "playing", lives 3, score 0, level 1
+PASS  holding Up ~600 ms lowers fuel
+PASS  Left and Right cause no error
+PASS  P pauses; score and fuel hold for 600 ms
+PASS  P resumes: state "playing"
+PASS  no console errors
+PASS  no request other than file:, data: or blob:
+check.mjs: 10/10 passed — PASS

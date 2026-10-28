@@ -1,0 +1,130 @@
+{
+  "game": "/mnt/d/Projects/soul/wf-value-arms/C",
+  "seconds": 52.6,
+  "must_haves": {
+    "1": {
+      "status": "unverified (needs a human)",
+      "note": "state \"start\" on load; title/prompt not in the page text (drawn on a canvas?)"
+    },
+    "2": {
+      "status": "unverified (needs a human)",
+      "note": "Enter, Up/W thrust (fuel drops), Left/Right/A/D (no error), P pause/resume, Enter restart all work; rotation itself is not visible through the hooks"
+    },
+    "3": {
+      "status": "pass",
+      "note": "a life was lost with no input (at 4.6s), as gravity should cause; whether by the planet or debris, and pull stronger when closer, a human checks"
+    },
+    "4": {
+      "status": "unverified (needs a human)",
+      "note": "packages: count and pickup need a human; carrying was true at some sample"
+    },
+    "5": {
+      "status": "unverified (needs a human)",
+      "note": "station and delivery need a human; most deliveries seen 0, top score 0"
+    },
+    "6": {
+      "status": "unverified (needs a human)",
+      "note": "debris per level needs a human; highest level seen 1"
+    },
+    "7": {
+      "status": "unverified (needs a human)",
+      "note": "starts at 3 lives, level 1; 3 life loss(es), each by 1; level up every 3 deliveries needs a human"
+    },
+    "8": {
+      "status": "unverified (needs a human)",
+      "note": "thrust lowers fuel and fuel stays in 0-100; refuel on delivery and no thrust at 0 fuel need a human"
+    },
+    "9": {
+      "status": "unverified (needs a human)",
+      "note": "HUD needs a human (page text while playing names: none — a canvas HUD is not readable here)"
+    },
+    "10": {
+      "status": "unverified (needs a human)",
+      "note": "game over at 0 lives (51.7s), best 0 >= score 0, Enter restarts with 3/0/1; the screen text needs a human"
+    },
+    "11": {
+      "status": "unverified (needs a human)",
+      "note": "best was 0 (the script scored no points), so the reload proved nothing; after reload best=0"
+    },
+    "12": {
+      "status": "pass",
+      "note": "no request other than file: or data: over the whole run"
+    }
+  },
+  "check": [
+    {
+      "name": "page loads",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "window.game has all 8 hooks, right types",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "state is \"start\" on load",
+      "ok": true,
+      "detail": "state=start"
+    },
+    {
+      "name": "Enter starts: state \"playing\", lives 3, score 0, level 1",
+      "ok": true,
+      "detail": "state=playing lives=3 score=0 level=1"
+    },
+    {
+      "name": "holding Up ~600 ms lowers fuel",
+      "ok": true,
+      "detail": "fuel 100 -> 92.8011999999999"
+    },
+    {
+      "name": "Left and Right cause no error",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "P pauses; score and fuel hold for 600 ms",
+      "ok": true,
+      "detail": "score 0 -> 0, fuel 93.41789999999986 -> 93.41789999999986, state=paused"
+    },
+    {
+      "name": "P resumes: state \"playing\"",
+      "ok": true,
+      "detail": "state=playing"
+    },
+    {
+      "name": "no console errors",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "no request other than file:, data: or blob:",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "console_errors": [],
+  "hook_problems": [],
+  "life_losses": [
+    {
+      "t": 4.6,
+      "from": 3,
+      "to": 2
+    },
+    {
+      "t": 25.8,
+      "from": 2,
+      "to": 1
+    },
+    {
+      "t": 51.7,
+      "from": 1,
+      "to": 0
+    }
+  ],
+  "reload": {
+    "before": 0,
+    "after": 0,
+    "state": "start"
+  }
+}

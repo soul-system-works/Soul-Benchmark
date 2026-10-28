@@ -1,0 +1,205 @@
+[
+  {
+    "arm": "/mnt/d/Projects/soul/wf-value-arms/A",
+    "claude": [
+      {
+        "bucket": "main",
+        "model": "claude-opus-5-5",
+        "input_tokens": 16,
+        "cache_creation_input_tokens": 34429,
+        "cache_read_input_tokens": 355212,
+        "output_tokens": 19798,
+        "messages": 8
+      }
+    ],
+    "claude_per_model": {
+      "claude-opus-5-5": {
+        "input_tokens": 16,
+        "cache_creation_input_tokens": 34429,
+        "cache_read_input_tokens": 355212,
+        "output_tokens": 19798,
+        "messages": 8
+      }
+    },
+    "claude_main_vs_rest": {
+      "main": {
+        "input_tokens": 16,
+        "cache_creation_input_tokens": 34429,
+        "cache_read_input_tokens": 355212,
+        "output_tokens": 19798,
+        "messages": 8
+      },
+      "subagent+worker": {}
+    },
+    "time": {
+      "main_sessions": 1,
+      "first_prompt": "2026-10-28T15:58:25.286000+00:00",
+      "last_assistant": "2026-10-28T16:02:17.578000+00:00",
+      "wall_min": 3.9,
+      "human_prompts": 1,
+      "prompts_after_first": 0
+    },
+    "codex": {
+      "logs": 0
+    },
+    "ollama": [],
+    "dispatch_crosscheck": []
+  },
+  {
+    "arm": "/mnt/d/Projects/soul/wf-value-arms/B",
+    "claude": [
+      {
+        "bucket": "main",
+        "model": "claude-opus-5-5",
+        "input_tokens": 22,
+        "cache_creation_input_tokens": 54555,
+        "cache_read_input_tokens": 697781,
+        "output_tokens": 26795,
+        "messages": 11
+      }
+    ],
+    "claude_per_model": {
+      "claude-opus-5-5": {
+        "input_tokens": 22,
+        "cache_creation_input_tokens": 54555,
+        "cache_read_input_tokens": 697781,
+        "output_tokens": 26795,
+        "messages": 11
+      }
+    },
+    "claude_main_vs_rest": {
+      "main": {
+        "input_tokens": 22,
+        "cache_creation_input_tokens": 54555,
+        "cache_read_input_tokens": 697781,
+        "output_tokens": 26795,
+        "messages": 11
+      },
+      "subagent+worker": {}
+    },
+    "time": {
+      "main_sessions": 1,
+      "first_prompt": "2026-10-28T16:06:27.505000+00:00",
+      "last_assistant": "2026-10-28T16:11:47.567000+00:00",
+      "wall_min": 5.3,
+      "human_prompts": 1,
+      "prompts_after_first": 0
+    },
+    "codex": {
+      "logs": 0
+    },
+    "ollama": [],
+    "dispatch_crosscheck": []
+  },
+  {
+    "arm": "/mnt/d/Projects/soul/wf-value-arms/C",
+    "claude": [
+      {
+        "bucket": "main",
+        "model": "claude-opus-5-5",
+        "input_tokens": 74,
+        "cache_creation_input_tokens": 70537,
+        "cache_read_input_tokens": 2465973,
+        "output_tokens": 18136,
+        "messages": 32
+      },
+      {
+        "bucket": "worker",
+        "model": "claude-opus-5-5",
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 54170,
+        "cache_read_input_tokens": 202518,
+        "output_tokens": 7470,
+        "messages": 7
+      },
+      {
+        "bucket": "worker",
+        "model": "claude-sonnet-5-5",
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 48687,
+        "cache_read_input_tokens": 134175,
+        "output_tokens": 17302,
+        "messages": 6
+      }
+    ],
+    "claude_per_model": {
+      "claude-opus-5-5": {
+        "input_tokens": 88,
+        "cache_creation_input_tokens": 124707,
+        "cache_read_input_tokens": 2668491,
+        "output_tokens": 25606,
+        "messages": 39
+      },
+      "claude-sonnet-5-5": {
+        "input_tokens": 12,
+        "cache_creation_input_tokens": 48687,
+        "cache_read_input_tokens": 134175,
+        "output_tokens": 17302,
+        "messages": 6
+      }
+    },
+    "claude_main_vs_rest": {
+      "main": {
+        "input_tokens": 74,
+        "cache_creation_input_tokens": 70537,
+        "cache_read_input_tokens": 2465973,
+        "output_tokens": 18136,
+        "messages": 32
+      },
+      "subagent+worker": {
+        "input_tokens": 26,
+        "cache_creation_input_tokens": 102857,
+        "cache_read_input_tokens": 336693,
+        "output_tokens": 24772,
+        "messages": 13
+      }
+    },
+    "time": {
+      "main_sessions": 1,
+      "first_prompt": "2026-10-28T16:13:03.741000+00:00",
+      "last_assistant": "2026-10-28T16:23:49.610000+00:00",
+      "wall_min": 10.8,
+      "human_prompts": 1,
+      "prompts_after_first": 0
+    },
+    "codex": {
+      "turns": 2,
+      "input_tokens": 188785,
+      "cached_input_tokens": 128512,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 1017,
+      "reasoning_output_tokens": 445,
+      "logs": 2
+    },
+    "ollama": [],
+    "dispatch_crosscheck": [
+      {
+        "rows": 2,
+        "tokens_in": 256702,
+        "tokens_out": 7470,
+        "unreported": 0,
+        "wall_s": 104.0,
+        "harness": "claude",
+        "model": "opus"
+      },
+      {
+        "rows": 2,
+        "tokens_in": 182874,
+        "tokens_out": 17302,
+        "unreported": 0,
+        "wall_s": 131.9,
+        "harness": "claude",
+        "model": "sonnet"
+      },
+      {
+        "rows": 2,
+        "tokens_in": 188785,
+        "tokens_out": 1017,
+        "unreported": 0,
+        "wall_s": 72.6,
+        "harness": "codex",
+        "model": "default"
+      }
+    ]
+  }
+]
