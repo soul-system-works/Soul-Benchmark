@@ -19,11 +19,18 @@ for x in A B C MANIFEST.txt; do
   if [ -e "$BASE/$x" ]; then echo "refusing: $BASE/$x already exists" >&2; exit 1; fi
 done
 mkdir -p "$BASE"
+# Playwright for the arms, installed in their parent folder (Node finds it walking up),
+# so check.mjs needs no path back to this kit.
+cp "$KIT/package.json" "$KIT/package-lock.json" "$BASE/"
+( cd "$BASE" || exit 1; npm ci --no-audit --no-fund --silent )
 
 for arm in A B C; do
   d="$BASE/$arm"
   mkdir "$d"
-  cp "$KIT/SPEC.md" "$KIT/check.mjs" "$d/"
+  cp "$KIT/check.mjs" "$d/"
+  # The arm's copy of the spec opens with the game's name only: the kit's first heading
+  # says it is the experiment's task, which would tell the arm it is being tested.
+  sed '1s/.*/# Orbit Courier/' "$KIT/SPEC.md" > "$d/SPEC.md"
   printf '.ai/\nnode_modules/\n' > "$d/.gitignore"
   if [ "$arm" != A ]; then
     printf '@~/.claude/plugins/marketplaces/soul-system/operations/CLAUDE.md\n' > "$d/CLAUDE.md"

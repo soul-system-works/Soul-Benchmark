@@ -13,8 +13,10 @@ import path from 'node:path';
 
 // Playwright comes from the experiment's own kit by absolute path, so a game folder
 // needs no `npm install` and no network.
-export const KIT = '/mnt/d/Projects/soul/soul-benchmark/experiments/2026-10-28-workflow-value';
-const { chromium } = createRequire(path.join(KIT, 'package.json'))('playwright');
+// Playwright resolves from this file's folder upward: the kit's own node_modules, or for
+// an arm the one make-arms.sh installs in the arms' parent folder. No absolute path, so
+// nothing in an arm's copy points at the kit and its hidden playtest.
+const { chromium } = createRequire(import.meta.url)('playwright');
 
 export const HOOKS = {
   state: 'string', score: 'number', lives: 'number', level: 'number',
@@ -23,12 +25,12 @@ export const HOOKS = {
 export const STATES = ['start', 'playing', 'paused', 'over'];
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const LOCAL = /^(file|data):/;
+const LOCAL = /^(file|data|blob):/;  // blob: is in-memory, not a download
 
 // Open <dir>/index.html. Chromium's own sandbox is off so the check also runs inside
 // a bubblewrap jail (the Soul System confines a workflow's checks that way), where
 // Chromium cannot make its own namespaces. log.errors collects console errors and
-// uncaught page errors; log.requests every request that is not file: or data: (those
+// uncaught page errors; log.requests every request that is not file:, data: or blob: (those
 // are aborted too, so an unconfined run downloads nothing).
 export async function openGame(dir) {
   const browser = await chromium.launch({
@@ -158,7 +160,7 @@ export async function runCheck(page, log, report, loadError = null) {
     else if (name.startsWith('window.game') && !ok && !(await readGame(page).catch(() => null))) stop = 'no window.game';
   }
   report('no console errors', log.errors.length === 0, log.errors.slice(0, 5).join(' | '));
-  report('no request other than file: or data:', log.requests.length === 0, log.requests.slice(0, 5).join(' '));
+  report('no request other than file:, data: or blob:', log.requests.length === 0, log.requests.slice(0, 5).join(' '));
   return all && log.errors.length === 0 && log.requests.length === 0;
 }
 
