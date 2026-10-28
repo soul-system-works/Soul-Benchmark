@@ -16,7 +16,9 @@
 
 ## Each arm (any order; one sitting if you can)
 
-Start the screen recording, then open a fresh terminal in the arm folder.
+Start the screen recording, then open a fresh terminal in the arm folder. Put every
+arm in the **same permission mode** before the first prompt — the one you normally work
+in (e.g. auto mode, Shift+Tab) — so no arm is slowed by prompts the others don't get.
 
 | Arm | Folder | Launch line |
 |---|---|---|
