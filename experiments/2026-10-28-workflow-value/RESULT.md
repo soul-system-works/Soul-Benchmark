@@ -108,3 +108,41 @@ the best way. Arm D (C with an Opus implementer) is not needed: C did not beat B
 
 `out/measure.json`, `out/check-{A,B,C}.txt`, `out/playtest-{A,B,C}.json`,
 `scores/scores-ai.md`; the owner's timings and `/usage` paste in `RUN-SHEET.md`.
+
+## Lean re-run — arm C2 (Soul System v3.8.0)
+
+After round 1, `build-verify` became one tool call per round plus `accept` (v3.8.0):
+the tool runs the implementer, records the boxed-in check and runs both reviewers,
+and hands the host one bundle. C2 is arm C again, once, on the same spec, prompt,
+host model and default roles. No prediction was locked for it.
+
+| | A | B | C (v3.7.2) | C2 (v3.8.0) |
+|---|---|---|---|---|
+| Host requests (`/usage`) | 8 | 11 | 32 | 16 |
+| Host cost | $0.74 | $1.11 | $1.42 | $0.91 |
+| Workers (Claude) | — | — | $1.00 | $0.92 (Sonnet $0.37, Opus reviewer $0.55) |
+| **Claude total** | **$0.74** | **$1.11** | **$2.42** | **$1.83** |
+| × A | 1.0 | 1.5 | 3.3 | 2.5 |
+| Owner's clock | 5 min | 6 min | 9 min | 6 min |
+| Logs, first prompt → last reply | 3.9 min | 5.3 min | 10.8 min | 6.4 min |
+| `check.mjs` (kit copy) | 10/10 | 10/10 | 10/10 | 10/10 |
+
+Codex (ChatGPT plan, not in the dollars): 264k tokens in / 1.7k out over two reviews.
+Worker dollars are each `claude -p` worker's `total_cost_usd`. C2's host tokens from
+the logs (`out/measure-C2.json`: 1.08M cache read) are below `/usage`'s 1.3m, unlike
+round 1, where the two agreed; the dollar figures above are `/usage`'s.
+
+What happened in C2: one implementation (Sonnet, first try passed), reviewers raised 4
+findings (Opus 1, Codex 3), the host accepted all 4, one repair round fixed them,
+the second review found nothing, and `accept` applied the change and re-ran the
+check (passed). `sha256sum -c MANIFEST-C2.txt`: check and spec unedited.
+One accepted finding was a spec miss: debris stopped increasing after level 6, and
+the spec says "more and faster debris each level".
+
+**Reading it.** The lean loop halved the host's requests (32 → 16) and cut the host's
+cost by a third ($1.42 → $0.91); the whole run fell from 3.3× to 2.5× plain Claude
+Code and matched arm B's clock. The workflow still costs more than a single session
+on a task this easy. Where C2's host turns went: writing the brief (twice), launching
+two rounds and `accept`, and reading each bundle in pieces — the round-1 bundle was
+~510 lines, most of it the inline patch, which the host must read. n = 1; C2's game
+was not blind-scored, so it says nothing about quality beyond the check.

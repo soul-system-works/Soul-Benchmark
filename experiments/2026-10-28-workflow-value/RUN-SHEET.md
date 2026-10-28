@@ -116,3 +116,14 @@ drop?
 
 ### C2 usage
 (paste `/usage` here)
+
+C2 (owner): about 6 minutes, no step-ins.
+```
+Total cost:            $0.91
+Total duration (API):  1m 32s
+Total duration (wall): 6m 43s
+Total code changes:    0 lines added, 0 lines removed
+Usage by model:
+     claude-opus-5-5:  1.1k input, 8.8k output, 1.3m cache read, 58.0k cache write ($0.91)
+Prompt cache (main):   16 requests · 95% of input tokens from cache · no misses · warm (1h TTL, last activity 7s ago)
+```

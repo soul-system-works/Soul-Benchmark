@@ -1,0 +1,113 @@
+[
+  {
+    "arm": "/mnt/d/Projects/soul/wf-value-arms/C2",
+    "claude": [
+      {
+        "bucket": "main",
+        "model": "claude-opus-5-5",
+        "input_tokens": 38,
+        "cache_creation_input_tokens": 56944,
+        "cache_read_input_tokens": 1083273,
+        "output_tokens": 8613,
+        "messages": 16
+      },
+      {
+        "bucket": "worker",
+        "model": "claude-opus-5-5",
+        "input_tokens": 10,
+        "cache_creation_input_tokens": 54132,
+        "cache_read_input_tokens": 114557,
+        "output_tokens": 4751,
+        "messages": 5
+      },
+      {
+        "bucket": "worker",
+        "model": "claude-sonnet-5-5",
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 49198,
+        "cache_read_input_tokens": 173898,
+        "output_tokens": 15524,
+        "messages": 7
+      }
+    ],
+    "claude_per_model": {
+      "claude-opus-5-5": {
+        "input_tokens": 48,
+        "cache_creation_input_tokens": 111076,
+        "cache_read_input_tokens": 1197830,
+        "output_tokens": 13364,
+        "messages": 21
+      },
+      "claude-sonnet-5-5": {
+        "input_tokens": 14,
+        "cache_creation_input_tokens": 49198,
+        "cache_read_input_tokens": 173898,
+        "output_tokens": 15524,
+        "messages": 7
+      }
+    },
+    "claude_main_vs_rest": {
+      "main": {
+        "input_tokens": 38,
+        "cache_creation_input_tokens": 56944,
+        "cache_read_input_tokens": 1083273,
+        "output_tokens": 8613,
+        "messages": 16
+      },
+      "subagent+worker": {
+        "input_tokens": 24,
+        "cache_creation_input_tokens": 103330,
+        "cache_read_input_tokens": 288455,
+        "output_tokens": 20275,
+        "messages": 12
+      }
+    },
+    "time": {
+      "main_sessions": 1,
+      "first_prompt": "2026-10-28T20:20:53.079000+00:00",
+      "last_assistant": "2026-10-28T20:27:17.566000+00:00",
+      "wall_min": 6.4,
+      "human_prompts": 1,
+      "prompts_after_first": 0
+    },
+    "codex": {
+      "turns": 2,
+      "input_tokens": 263788,
+      "cached_input_tokens": 210048,
+      "cache_write_input_tokens": 0,
+      "output_tokens": 1705,
+      "reasoning_output_tokens": 694,
+      "logs": 2
+    },
+    "ollama": [],
+    "dispatch_crosscheck": [
+      {
+        "rows": 2,
+        "tokens_in": 168699,
+        "tokens_out": 4751,
+        "unreported": 0,
+        "wall_s": 75.9,
+        "harness": "claude",
+        "model": "opus"
+      },
+      {
+        "rows": 2,
+        "tokens_in": 223110,
+        "tokens_out": 15524,
+        "unreported": 0,
+        "wall_s": 119.1,
+        "harness": "claude",
+        "model": "sonnet"
+      },
+      {
+        "rows": 2,
+        "tokens_in": 263788,
+        "tokens_out": 1705,
+        "unreported": 0,
+        "wall_s": 76.5,
+        "harness": "codex",
+        "model": "default"
+      }
+    ]
+  }
+]
