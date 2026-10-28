@@ -1,0 +1,35 @@
+<!doctype html>
+<!-- Known-good-for-the-check control: a minimal state machine that exposes the test
+     hooks and answers the keys correctly, with no gameplay at all (no ship, gravity,
+     packages, station, debris or HUD). check.mjs must PASS here; the hidden playtest
+     must not call it a game. -->
+<html><head><meta charset="utf-8"><title>Orbit Courier (stub)</title></head>
+<body>
+<p id="screen">Orbit Courier — Press Enter to start</p>
+<script>
+  const s = { state: 'start', score: 0, lives: 3, level: 1, fuel: 100, carrying: false, deliveries: 0,
+              best: Number(localStorage.getItem('stub-best')) || 0 };
+  window.game = {};
+  for (const k of Object.keys(s)) Object.defineProperty(window.game, k, { get: () => s[k], enumerable: true });
+  const held = new Set();
+  const screen = document.getElementById('screen');
+  function show() {
+    screen.textContent = s.state === 'start' ? 'Orbit Courier — Press Enter to start'
+      : s.state === 'paused' ? 'Paused' : `Score ${s.score} Lives ${s.lives} Level ${s.level} Fuel ${Math.round(s.fuel)}`;
+  }
+  addEventListener('keydown', (e) => {
+    held.add(e.key);
+    if (e.key === 'Enter' && (s.state === 'start' || s.state === 'over'))
+      Object.assign(s, { state: 'playing', score: 0, lives: 3, level: 1, fuel: 100, carrying: false, deliveries: 0 });
+    else if ((e.key === 'p' || e.key === 'P') && s.state === 'playing') s.state = 'paused';
+    else if ((e.key === 'p' || e.key === 'P') && s.state === 'paused') s.state = 'playing';
+    show();
+  });
+  addEventListener('keyup', (e) => held.delete(e.key));
+  setInterval(() => {
+    if (s.state === 'playing' && (held.has('ArrowUp') || held.has('w') || held.has('W')))
+      s.fuel = Math.max(0, s.fuel - 1);
+    show();
+  }, 20);
+</script>
+</body></html>

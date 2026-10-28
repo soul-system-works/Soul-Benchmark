@@ -1,0 +1,9 @@
+{
+  "name": "workflow-value-kit",
+  "private": true,
+  "description": "Test kit for the 2026-10-28 workflow-value experiment: check.mjs, playtest.mjs and their controls.",
+  "type": "module",
+  "dependencies": {
+    "playwright": "1.64.1"
+  }
+}
