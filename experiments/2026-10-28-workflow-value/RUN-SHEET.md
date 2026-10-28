@@ -93,3 +93,26 @@ done
 
 Then blind the games and hand them to the two scorers as `SCORING-SHEET.md` says.
 Keep the coin key private until both sheets are in.
+
+## Lean re-run — arm C2 (Soul System v3.8.0)
+
+Round 1's arm C again, once, with the lean loop (`build-verify` one call per round,
+then `accept`). Same spec, same check, same default roles, same host model, same
+permission mode as round 1. The question: does the host's overhead (32 turns, $1.42)
+drop?
+
+1. Update the plugin to **v3.8.0** and check it prints `3.8.0` (the command in
+   "Before the first arm", step 2).
+2. The arm already exists: `/mnt/d/Projects/soul/wf-value-arms/C2` (made like C;
+   `MANIFEST-C2.txt` beside it).
+3. `cd /mnt/d/Projects/soul/wf-value-arms/C2 || exit 1`, then `claude --model opus`.
+4. Paste exactly:
+   `/soul-workflow build-verify Build the game described in SPEC.md in this folder. Done when: node check.mjs passes.`
+5. As before: note step-ins and the clock time of "done"; then `/usage`, paste it below; `/exit`.
+
+| Arm | First prompt at | "Done" at | Stepped in (time — what) |
+|---|---|---|---|
+| C2 | | | |
+
+### C2 usage
+(paste `/usage` here)
