@@ -13,7 +13,7 @@ Arms per `PLAN.md`: A plain (no CLAUDE.md, plugins, Soul or memory — launch li
 leak-tested against a control), B the owner's normal setup, C B plus
 `/soul-workflow build-verify` with the default roles (Soul System v3.7.2). Host model
 Opus 5.5 in all three; the same prompt; run in series by the owner, order A, B, C,
-with no step-ins and no permission prompts in any arm. `sha256sum -c MANIFEST.txt`:
+with no step-ins in any arm (no permission prompts noted). `sha256sum -c MANIFEST.txt`:
 no arm edited its `check.mjs` or `SPEC.md`.
 
 ## Quality
@@ -68,7 +68,7 @@ them). Codex ran on the owner's ChatGPT plan and is not in these dollars.
 | × A | 1.0 | 1.5 | | | 3.3 |
 | Codex (ChatGPT plan) | — | — | — | 189k in / 1k out | |
 
-Tokens (`out/measure.json`) agree with `/usage` to the token for every host. Why C cost
+Tokens (`out/measure.json`) agree with `/usage` for every host, to `/usage`'s rounding (0.1k). Why C cost
 more: its host took **32 turns** (A 8, B 11) — writing the brief, reading patches,
 re-running checks, weighing two reviews, one repair round — and each turn re-reads the
 growing conversation (2.5M cache-read tokens against A's 0.36M). Handing the
